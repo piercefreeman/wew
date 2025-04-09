@@ -33,5 +33,14 @@ Would this be an infringement of intellectual property rights? I don't have a de
 
 Cargo has a very poor experience when relying on dynamic libraries, this cannot be fixed at the compiled script level, at least not by publishing directly to crates.io, if you want to run an example, see this issue: https://github.com/mycrl/webview-rs/issues/3
 
+Note that cef injects the `MessageTransport` object within the page, which is the method for communicating with the native, an internal messaging mechanism.
+
+```ts
+interface MessageTransport {
+    on: (handle: (message: string) -> void) -> void;
+    send: (message: string) -> void;
+}
+```
+
 ## License
 [MIT](./LICENSE) Copyright (c) 2022 Mr.Panda.
