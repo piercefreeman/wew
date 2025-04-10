@@ -4,10 +4,7 @@ mod page;
 use std::{
     env::args,
     ffi::{c_char, c_int},
-    sync::{
-        mpsc::channel,
-        Arc, Mutex,
-    },
+    sync::{mpsc::channel, Arc, Mutex},
     thread,
 };
 

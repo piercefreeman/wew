@@ -53,12 +53,13 @@ fn main() -> Result<()> {
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        if !is_exsit(&join(cef_path, "./libcef_dll_wrapper")) {
-            exec("cmake -DCMAKE_BUILD_TYPE=Release .", cef_path)?;
-            exec("cmake --build . --config Release", cef_path)?;
-        }
+    if !is_exsit(&join(cef_path, "./libcef_dll_wrapper")) {
+        exec(
+            "cmake -DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\" -DCMAKE_BUILD_TYPE=Release .",
+            cef_path,
+        )?;
+
+        exec("cmake --build . --config Release", cef_path)?;
     }
 
     {
@@ -149,20 +150,35 @@ fn main() -> Result<()> {
         #[cfg(target_os = "macos")]
         {
             println!("cargo:rustc-link-lib=framework=Chromium Embedded Framework");
+            println!("cargo:rustc-link-lib=cef_dll_wrapper");
         }
 
         println!("cargo:rustc-link-lib=static=sys");
-        println!("cargo:rustc-link-search=all={}", &out_dir);
+
+        #[cfg(target_os = "macos")]
+        {
+            println!(
+                "cargo:rustc-link-search=framework={}",
+                join(cef_path, "./Release")
+            );
+            
+            println!(
+                "cargo:rustc-link-search=all={}",
+                join(cef_path, "./libcef_dll_wrapper")
+            );
+        }
+
+        println!(
+            "cargo:rustc-link-search=all={}",
+            join(cef_path, "./libcef_dll_wrapper/Release")
+        );
+
         println!(
             "cargo:rustc-link-search=all={}",
             join(cef_path, "./Release")
         );
 
-        #[cfg(not(target_os = "macos"))]
-        println!(
-            "cargo:rustc-link-search=all={}",
-            join(cef_path, "./libcef_dll_wrapper/Release")
-        );
+        println!("cargo:rustc-link-search=all={}", &out_dir);
     }
 
     Ok(())
