@@ -29,6 +29,13 @@ fn exec(command: &str, work_dir: &str) -> Result<String> {
     }
 }
 
+#[cfg(target_os = "windows")]
+static URL: &'static str = "https://github.com/mycrl/webview-rs/releases/download/distributions/cef-windows.zip";
+
+#[cfg(target_os = "macos")]
+static URL: &'static str = "https://github.com/mycrl/webview-rs/releases/download/distributions/cef-macos.zip";
+
+#[rustfmt::skip]
 fn main() -> Result<()> {
     let target = env::var("TARGET")?;
     let out_dir = env::var("OUT_DIR")?;
@@ -37,50 +44,38 @@ fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=./cxx");
     println!("cargo:rerun-if-changed=./build.rs");
 
+    #[cfg(target_os = "windows")]
     if !is_exsit(cef_path) {
-        #[cfg(target_os = "windows")]
-        {
-            exec("Invoke-WebRequest -Uri https://github.com/mycrl/webview-rs/releases/download/distributions/cef-windows.zip -OutFile ./cef.zip", &out_dir)?;
-            exec("Expand-Archive -Path cef.zip -DestinationPath ./", &out_dir)?;
-            exec("Remove-Item ./cef.zip", &out_dir)?;
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            exec("wget https://github.com/mycrl/webview-rs/releases/download/distributions/cef-macos.zip -O ./cef.zip", &out_dir)?;
-            exec("tar -xf ./cef.zip -C ./", &out_dir)?;
-            exec("rm -f ./cef.zip", &out_dir)?;
-        }
+        exec(&format!("Invoke-WebRequest -Uri {} -OutFile ./cef.zip", URL), &out_dir)?;
+        exec("Expand-Archive -Path cef.zip -DestinationPath ./", &out_dir)?;
+        exec("Remove-Item ./cef.zip", &out_dir)?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    if !is_exsit(cef_path) {
+        exec(&format!("wget {} -O ./cef.zip", URL), &out_dir)?;
+        exec("tar -xf ./cef.zip -C ./", &out_dir)?;
+        exec("rm -f ./cef.zip", &out_dir)?;
     }
 
     if !is_exsit(&join(cef_path, "./libcef_dll_wrapper")) {
         #[cfg(not(target_os = "windows"))]
-        exec(
-            "cmake -DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\" -DCMAKE_BUILD_TYPE=Release .",
-            cef_path,
-        )?;
+        exec("cmake -DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\" -DCMAKE_BUILD_TYPE=Release .", cef_path)?;
         
         #[cfg(target_os = "windows")]
-        exec(
-            "cmake -DCMAKE_BUILD_TYPE=Release .",
-            cef_path,
-        )?;
+        exec("cmake -DCMAKE_BUILD_TYPE=Release .", cef_path)?;
 
         exec("cmake --build . --config Release", cef_path)?;
     }
 
-    {
-        bindgen::Builder::default()
-            .default_enum_style(bindgen::EnumVariation::Rust {
-                non_exhaustive: false,
-            })
-            .prepend_enum_name(false)
-            .derive_eq(true)
-            .size_t_is_usize(true)
-            .header("./cxx/webview.h")
-            .generate()?
-            .write_to_file(&join(&out_dir, "bindings.rs"))?;
-    }
+    bindgen::Builder::default()
+        .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: false })
+        .prepend_enum_name(false)
+        .derive_eq(true)
+        .size_t_is_usize(true)
+        .header("./cxx/webview.h")
+        .generate()?
+        .write_to_file(&join(&out_dir, "bindings.rs"))?;
 
     {
         let mut cfgs = cc::Build::new();
@@ -137,55 +132,36 @@ fn main() -> Result<()> {
         cfgs.define("MACOS", Some("1"));
 
         cfgs.compile("sys");
+    }
+    
+    println!("cargo:rustc-link-lib=static=sys");
+    println!("cargo:rustc-link-search=all={}", &out_dir);
 
-        #[cfg(target_os = "windows")]
-        {
-            println!("cargo:rustc-link-lib=libcef");
-            println!("cargo:rustc-link-lib=libcef_dll_wrapper");
-            println!("cargo:rustc-link-lib=delayimp");
-            println!("cargo:rustc-link-lib=winmm");
-            println!("cargo:rustc-link-arg=/NODEFAULTLIB:libcmt.lib")
-        }
+    #[cfg(target_os = "windows")]
+    {
+        println!("cargo:rustc-link-lib=libcef");
+        println!("cargo:rustc-link-lib=libcef_dll_wrapper");
+        println!("cargo:rustc-link-lib=delayimp");
+        println!("cargo:rustc-link-lib=winmm");
+        println!("cargo:rustc-link-lib=user32");
+        println!("cargo:rustc-link-arg=/NODEFAULTLIB:libcmt.lib");
+        println!("cargo:rustc-link-search=all={}", join(cef_path, "./libcef_dll_wrapper/Release"));
+        println!("cargo:rustc-link-search=all={}", join(cef_path, "./Release"));
+    }
 
-        #[cfg(target_os = "linux")]
-        {
-            println!("cargo:rustc-link-lib=cef");
-            println!("cargo:rustc-link-lib=cef_dll_wrapper");
-            println!("cargo:rustc-link-lib=X11");
-        }
+    #[cfg(target_os = "linux")]
+    {
+        println!("cargo:rustc-link-lib=cef");
+        println!("cargo:rustc-link-lib=cef_dll_wrapper");
+        println!("cargo:rustc-link-lib=X11");
+    }
 
-        #[cfg(target_os = "macos")]
-        {
-            println!("cargo:rustc-link-lib=framework=Chromium Embedded Framework");
-            println!("cargo:rustc-link-lib=cef_dll_wrapper");
-        }
-
-        println!("cargo:rustc-link-lib=static=sys");
-
-        #[cfg(target_os = "macos")]
-        {
-            println!(
-                "cargo:rustc-link-search=framework={}",
-                join(cef_path, "./Release")
-            );
-            
-            println!(
-                "cargo:rustc-link-search=all={}",
-                join(cef_path, "./libcef_dll_wrapper")
-            );
-        }
-
-        println!(
-            "cargo:rustc-link-search=all={}",
-            join(cef_path, "./libcef_dll_wrapper/Release")
-        );
-
-        println!(
-            "cargo:rustc-link-search=all={}",
-            join(cef_path, "./Release")
-        );
-
-        println!("cargo:rustc-link-search=all={}", &out_dir);
+    #[cfg(target_os = "macos")]
+    {
+        println!("cargo:rustc-link-lib=cef_dll_wrapper");
+        println!("cargo:rustc-link-lib=framework=Chromium Embedded Framework");
+        println!("cargo:rustc-link-search=framework={}", join(cef_path, "./Release"));
+        println!("cargo:rustc-link-search=all={}",join(cef_path, "./libcef_dll_wrapper"));
     }
 
     Ok(())
