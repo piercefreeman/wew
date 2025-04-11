@@ -54,8 +54,15 @@ fn main() -> Result<()> {
     }
 
     if !is_exsit(&join(cef_path, "./libcef_dll_wrapper")) {
+        #[cfg(not(target_os = "windows"))]
         exec(
             "cmake -DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\" -DCMAKE_BUILD_TYPE=Release .",
+            cef_path,
+        )?;
+        
+        #[cfg(target_os = "windows")]
+        exec(
+            "cmake -DCMAKE_BUILD_TYPE=Release .",
             cef_path,
         )?;
 
