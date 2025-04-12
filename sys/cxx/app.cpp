@@ -13,11 +13,11 @@
 IApp::IApp(const WebviewOptions* settings, CreateWebviewCallback callback, void* ctx)
     : _callback(callback), _ctx(ctx)
 {
-    assert(settings);
+    assert(settings != nullptr);
 
     cef_settings.windowless_rendering_enabled = true;
     cef_settings.chrome_runtime = false;
-    cef_settings.no_sandbox = true;
+    cef_settings.no_sandbox = false;
     cef_settings.background_color = 0x00ffffff;
 
     // macos not support the multi threaded message loop.
@@ -73,7 +73,7 @@ CefRefPtr<IBrowser> IApp::CreateBrowser(std::string url,
                                         PageObserver observer,
                                         void* ctx)
 {
-    assert(settings_ptr);
+    assert(settings_ptr != nullptr);
 
     PageOptions settings;
     memcpy(&settings, settings_ptr, sizeof(PageOptions));

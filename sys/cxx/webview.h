@@ -101,23 +101,23 @@ typedef struct
 extern "C" {
 #endif
 
+    EXPORT void run_message_loop();
+
+    EXPORT void quit_message_loop();
+
+    EXPORT void poll_message_loop();
+
     EXPORT void execute_sub_process(int argc, const char** argv);
 
-    EXPORT void* create_webview(const WebviewOptions* settings, CreateWebviewCallback callback, void* ctx);
+    EXPORT void* create_app(const WebviewOptions* settings, CreateWebviewCallback callback, void* ctx);
 
-    //
-    // Run the CEF message loop. Use this function instead of an
-    // application-provided message loop to get the best balance between performance
-    // and CPU usage. This function will block until a quit message is received by
-    // the system.
-    //
-    EXPORT int webview_run(void* app, int argc, const char** argv);
+    EXPORT void start_app(void* app_ptr, int argc, const char** argv);
 
     //
     // This function should be called on the main application thread to shut down
     // the CEF browser process before the application exits.
     //
-    EXPORT void webview_exit(void* app);
+    EXPORT void close_app(void* app);
 
     EXPORT void* create_page(void* app,
                              const char* url,
@@ -125,7 +125,7 @@ extern "C" {
                              PageObserver observer,
                              void* ctx);
 
-    EXPORT void page_exit(void* browser);
+    EXPORT void close_page(void* browser);
 
     //
     // Send a mouse click event to the browser.

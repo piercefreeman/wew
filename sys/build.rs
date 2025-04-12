@@ -30,19 +30,22 @@ fn exec(command: &str, work_dir: &str) -> Result<String> {
 }
 
 #[cfg(target_os = "windows")]
-static URL: &'static str = "https://github.com/mycrl/webview-rs/releases/download/distributions/cef-windows.zip";
+static URL: &'static str =
+    "https://github.com/mycrl/webview-rs/releases/download/distributions/cef-windows.zip";
 
 #[cfg(target_os = "macos")]
-static URL: &'static str = "https://github.com/mycrl/webview-rs/releases/download/distributions/cef-macos.zip";
+static URL: &'static str =
+    "https://github.com/mycrl/webview-rs/releases/download/distributions/cef-macos.zip";
 
 #[rustfmt::skip]
 fn main() -> Result<()> {
+    println!("cargo:rerun-if-changed=./cxx");
+    println!("cargo:rerun-if-changed=./src");
+    println!("cargo:rerun-if-changed=./build.rs");
+
     let target = env::var("TARGET")?;
     let out_dir = env::var("OUT_DIR")?;
-    let cef_path: &str = &join(&out_dir, "./cef");
-
-    println!("cargo:rerun-if-changed=./cxx");
-    println!("cargo:rerun-if-changed=./build.rs");
+    let cef_path: &str = &join(&out_dir, "cef");
 
     #[cfg(target_os = "windows")]
     if !is_exsit(cef_path) {
@@ -56,6 +59,7 @@ fn main() -> Result<()> {
         exec(&format!("wget {} -O ./cef.zip", URL), &out_dir)?;
         exec("tar -xf ./cef.zip -C ./", &out_dir)?;
         exec("rm -f ./cef.zip", &out_dir)?;
+        exec("mv ./cef/Release/cef_sandbox.a ./cef/Release/libcef_sandbox.a", &out_dir)?;
     }
 
     if !is_exsit(&join(cef_path, "./libcef_dll_wrapper")) {
@@ -129,7 +133,8 @@ fn main() -> Result<()> {
         cfgs.define("LINUX", Some("1")).define("CEF_X11", Some("1"));
 
         #[cfg(target_os = "macos")]
-        cfgs.define("MACOS", Some("1"));
+        cfgs.define("MACOS", Some("1"))
+            .define("CEF_USE_SANDBOX", Some("1"));
 
         cfgs.compile("sys");
     }
@@ -158,10 +163,15 @@ fn main() -> Result<()> {
 
     #[cfg(target_os = "macos")]
     {
-        println!("cargo:rustc-link-lib=cef_dll_wrapper");
         println!("cargo:rustc-link-lib=framework=Chromium Embedded Framework");
         println!("cargo:rustc-link-search=framework={}", join(cef_path, "./Release"));
+
+        println!("cargo:rustc-link-lib=cef_dll_wrapper");
         println!("cargo:rustc-link-search=all={}",join(cef_path, "./libcef_dll_wrapper"));
+
+        println!("cargo:rustc-link-lib=cef_sandbox");
+        println!("cargo:rustc-link-lib=sandbox");
+        println!("cargo:rustc-link-search=native={}", join(cef_path, "Release"));
     }
 
     Ok(())

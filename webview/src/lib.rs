@@ -4,16 +4,16 @@ mod page;
 use std::{
     env::args,
     ffi::{c_char, c_int},
-    sync::{mpsc::channel, Arc, Mutex},
+    sync::{mpsc::channel, Arc},
     thread,
 };
-
-pub use webview_sys::{Modifiers, MouseButtons, PageState, TouchEventType, TouchPointerType};
 
 pub use self::{
     observer::Observer,
     page::{Page, PageOptions},
 };
+
+pub use webview_sys::{Modifiers, MouseButtons, PageState, TouchEventType, TouchPointerType};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Position {
@@ -128,29 +128,30 @@ impl std::fmt::Display for Error {
 ///
 /// An example CefApp implementation can be seen in cefsimple/simple_app.h and
 /// cefsimple/simple_app.cc.
-pub struct Webview {
-    pub(crate) wrapper: Arc<wrapper::Webview>,
-    condvar: Arc<Mutex<()>>,
-}
+pub struct Webview(Arc<wrapper::Webview>);
 
 impl Webview {
     pub fn new(options: &WebviewOptions<'_>) -> Result<Self, Error> {
-        let condvar = Arc::new(Mutex::new(()));
         let (tx, rx) = channel();
-        let wrapper =
-            Arc::new(wrapper::Webview::new(&options, tx).ok_or_else(|| Error::CreateWebviewError)?);
+        let inner = if let Some(it) = wrapper::Webview::new(&options, tx) {
+            it
+        } else {
+            return Err(Error::CreateWebviewError);
+        };
 
-        let condvar_ = condvar.clone();
-        let wrapper_ = wrapper.clone();
-        thread::spawn(move || {
-            let condvar = condvar_.lock().unwrap();
+        let inner = Arc::new(inner);
+        if cfg!(target_os = "windows") {
+            let inner_ = inner.clone();
+            thread::spawn(move || {
+                inner_.start();
+            });
+        } else {
+            inner.start();
+        }
 
-            wrapper_.run();
-            drop(condvar)
-        });
-
-        rx.recv().map_err(|_| Error::CreateWebviewError)?;
-        Ok(Self { condvar, wrapper })
+        rx.recv()
+            .map(|_| Self(inner))
+            .map_err(|_| Error::CreateWebviewError)
     }
 
     /// Create a new browser using the window parameters specified by
@@ -175,20 +176,50 @@ impl Webview {
         Page::new(&self, url, settings, observer)
     }
 
-    pub fn wait_exit(&self) {
-        let _unused = self.condvar.lock().unwrap();
+    #[cfg(not(target_os = "windows"))]
+    pub fn run() {
+        wrapper::MessageLoop::run();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn poll() {
+        wrapper::MessageLoop::poll();
+    }
+}
+
+impl Drop for Webview {
+    fn drop(&mut self) {
+        wrapper::MessageLoop::quit();
     }
 }
 
 pub(crate) mod wrapper {
     use std::{
         ffi::c_void,
-        sync::mpsc::{Receiver, Sender},
+        sync::mpsc::Sender,
     };
 
-    use webview_sys::{create_webview, webview_exit, webview_run, PageState};
+    use webview_sys::{
+        close_app, create_app, poll_message_loop, quit_message_loop, run_message_loop, start_app,
+    };
 
     use crate::{ffi, page::wrapper::Page, Args, Observer, PageOptions, WebviewOptions};
+
+    pub struct MessageLoop;
+
+    impl MessageLoop {
+        pub fn run() {
+            unsafe { run_message_loop() }
+        }
+
+        pub fn quit() {
+            unsafe { quit_message_loop() }
+        }
+
+        pub fn poll() {
+            unsafe { poll_message_loop() }
+        }
+    }
 
     /// CefApp
     ///
@@ -218,15 +249,6 @@ pub(crate) mod wrapper {
     unsafe impl Sync for Webview {}
 
     impl Webview {
-        extern "C" fn callback(ctx: *mut c_void) {
-            if let Err(e) = unsafe { Box::from_raw(ctx as *mut Sender<()>) }.send(()) {
-                log::error!(
-                    "An error occurred when webview pushed a message to the callback. error={:?}",
-                    e
-                );
-            }
-        }
-
         pub(crate) fn new(options: &WebviewOptions, tx: Sender<()>) -> Option<Self> {
             let mut options = webview_sys::WebviewOptions {
                 cache_path: ffi::into_opt(options.cache_path),
@@ -235,9 +257,9 @@ pub(crate) mod wrapper {
             };
 
             let raw = unsafe {
-                create_webview(
+                create_app(
                     &mut options,
-                    Some(Self::callback),
+                    Some(create_webview_callback),
                     Box::into_raw(Box::new(tx)) as *mut _,
                 )
             };
@@ -270,17 +292,17 @@ pub(crate) mod wrapper {
             url: &str,
             options: &PageOptions,
             observer: T,
-        ) -> (Page, Receiver<PageState>)
+        ) -> Page
         where
             T: Observer + 'static,
         {
             Page::new(&self, url, options, observer)
         }
 
-        pub(crate) fn run(&self) {
+        pub(crate) fn start(&self) {
             let args = Args::default();
-            if unsafe { webview_run(self.0, args.len(), args.as_ptr()) } != 0 {
-                panic!("Webview exited unexpectedly, this is a bug.")
+            unsafe {
+                start_app(self.0, args.len(), args.as_ptr());
             }
         }
     }
@@ -288,8 +310,17 @@ pub(crate) mod wrapper {
     impl Drop for Webview {
         fn drop(&mut self) {
             unsafe {
-                webview_exit(self.0);
+                close_app(self.0);
             }
+        }
+    }
+
+    extern "C" fn create_webview_callback(ctx: *mut c_void) {
+        if let Err(e) = unsafe { Box::from_raw(ctx as *mut Sender<()>) }.send(()) {
+            log::error!(
+                "An error occurred when webview pushed a message to the callback. error={:?}",
+                e
+            );
         }
     }
 }

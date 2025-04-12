@@ -84,7 +84,7 @@ fn run_cef() -> anyhow::Result<()> {
         Ok::<(), anyhow::Error>(())
     });
 
-    app.wait_exit();
+    Webview::run();
     Ok(())
 }
 

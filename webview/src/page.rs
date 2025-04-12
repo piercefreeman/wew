@@ -1,10 +1,7 @@
-use std::{
-    sync::{mpsc::channel, Arc},
-    thread,
-};
+use std::sync::Arc;
 
 use raw_window_handle::RawWindowHandle;
-use webview_sys::{Modifiers, PageState, TouchEventType, TouchPointerType};
+use webview_sys::{Modifiers, TouchEventType, TouchPointerType};
 
 use crate::{ActionState, Error, ImeAction, MouseAction, Observer, Webview};
 
@@ -73,30 +70,7 @@ impl Page {
     where
         T: Observer + 'static,
     {
-        let (inner, receiver) = webview.wrapper.create_page(url, options, observer);
-
-        let (tx, rx) = channel::<bool>();
-        thread::spawn(move || {
-            let mut tx = Some(tx);
-
-            while let Ok(state) = receiver.recv() {
-                match state {
-                    PageState::LoadError => {
-                        tx.take().map(|tx| tx.send(false));
-                    }
-                    PageState::Load => {
-                        tx.take().map(|tx| tx.send(true));
-                    }
-                    _ => (),
-                }
-            }
-        });
-
-        if !rx.recv().map_err(|_| Error::CreatePageError)? {
-            return Err(Error::CreatePageError);
-        }
-
-        Ok(Arc::new(Self(inner)))
+        Ok(Arc::new(Self(webview.0.create_page(url, options, observer))))
     }
 
     /// Send a mouse click event to the browser.
@@ -192,21 +166,20 @@ pub(crate) mod wrapper {
         ffi::{c_int, c_void},
         num::NonZeroIsize,
         ptr::null,
-        sync::mpsc::Receiver,
     };
 
     use raw_window_handle::{RawWindowHandle, Win32WindowHandle};
     use webview_sys::{
-        create_page, page_exit, page_get_hwnd, page_resize, page_send_ime_composition,
+        close_page, create_page, page_get_hwnd, page_resize, page_send_ime_composition,
         page_send_ime_set_composition, page_send_keyboard, page_send_message,
         page_send_mouse_click, page_send_mouse_click_with_pos, page_send_mouse_move,
-        page_send_mouse_wheel, page_send_touch, page_set_devtools_state, Modifiers, PageState,
+        page_send_mouse_wheel, page_send_touch, page_set_devtools_state, Modifiers,
         TouchEventType, TouchPointerType,
     };
 
     use crate::{
         ffi,
-        observer::wrapper::{create_page_observer, Observer as ObserverWrapper},
+        observer::wrapper::create_page_observer,
         wrapper::Webview,
         ActionState, ImeAction, MouseAction, Observer,
     };
@@ -231,7 +204,7 @@ pub(crate) mod wrapper {
     /// An example CefClient implementation can be seen in
     /// cefsimple/simple_handler.h and cefsimple/simple_handler.cc.
     pub(crate) struct Page {
-        pub observer: *mut ObserverWrapper,
+        pub observer: *mut Box<dyn Observer>,
         pub raw: *mut c_void,
     }
 
@@ -244,7 +217,7 @@ pub(crate) mod wrapper {
             url: &str,
             options: &PageOptions,
             observer: T,
-        ) -> (Self, Receiver<PageState>)
+        ) -> Self
         where
             T: Observer + 'static,
         {
@@ -264,10 +237,8 @@ pub(crate) mod wrapper {
                 },
             };
 
-            let (observer, rx) = ObserverWrapper::new(observer);
-            let observer = Box::into_raw(Box::new(observer));
-
             let url = ffi::into(url);
+            let observer: *mut Box<dyn Observer> = Box::into_raw(Box::new(Box::new(observer)));
             let raw = unsafe {
                 create_page(
                     webview.0,
@@ -282,7 +253,7 @@ pub(crate) mod wrapper {
                 ffi::free(url);
             }
 
-            (Self { observer, raw }, rx)
+            Self { observer, raw }
         }
 
         pub(crate) fn send_message(&self, message: &str) {
@@ -415,7 +386,7 @@ pub(crate) mod wrapper {
     impl Drop for Page {
         fn drop(&mut self) {
             unsafe {
-                page_exit(self.raw);
+                close_page(self.raw);
             }
 
             drop(unsafe { Box::from_raw(self.observer) });
