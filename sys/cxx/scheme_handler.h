@@ -31,22 +31,19 @@
 #define WEBVIEW_SCHEME_DOMAIN ""
 #endif
 
-static int SCHEME_OPT = CEF_SCHEME_OPTION_STANDARD | CEF_SCHEME_OPTION_SECURE |
-CEF_SCHEME_OPTION_CORS_ENABLED | CEF_SCHEME_OPTION_FETCH_ENABLED;
-
 class ClientSchemeHandler : public CefResourceHandler
 {
 public:
     static const std::string FormatMime(std::string& url);
-
+    
     ClientSchemeHandler(std::string dir);
     ~ClientSchemeHandler()
     {
         Cancel();
     }
-
+    
     /* CefResourceHandler */
-
+    
     bool Open(CefRefPtr<CefRequest> request,
               bool& handle_request,
               CefRefPtr<CefCallback> callback) override;
@@ -61,10 +58,10 @@ public:
               int& bytes_read,
               CefRefPtr<CefResourceReadCallback> callback) override;
     void Cancel() override;
-
+    
     const std::string SchemeName = WEBVIEW_SCHEME_NAME;
     const std::string SchemeDomain = WEBVIEW_SCHEME_DOMAIN;
-
+    
 private:
     std::string _file_root;
     std::string _mime_type = "";
@@ -77,7 +74,7 @@ private:
 #else
     std::optional<FILE*> _fd = std::nullopt;
 #endif
-
+    
     IMPLEMENT_REFCOUNTING(ClientSchemeHandler);
     DISALLOW_COPY_AND_ASSIGN(ClientSchemeHandler);
 };
@@ -86,16 +83,16 @@ class ClientSchemeHandlerFactory : public CefSchemeHandlerFactory
 {
 public:
     ClientSchemeHandlerFactory(std::string dir);
-
+    
     // Return a new scheme handler instance to handle the request.
     CefRefPtr<CefResourceHandler> Create(CefRefPtr<CefBrowser> browser,
                                          CefRefPtr<CefFrame> frame,
                                          const CefString& scheme_name,
                                          CefRefPtr<CefRequest> request) override;
-
+    
 private:
     std::string _dir;
-
+    
     IMPLEMENT_REFCOUNTING(ClientSchemeHandlerFactory);
     DISALLOW_COPY_AND_ASSIGN(ClientSchemeHandlerFactory);
 };

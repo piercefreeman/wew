@@ -20,8 +20,8 @@ add_library(webview SHARED
             ./webview.h
             ./app.cpp
             ./app.h
-            ./browser.cpp
-            ./browser.h
+            ./page.cpp
+            ./page.h
             ./render.cpp
             ./render.h
             ./display.cpp
@@ -68,4 +68,8 @@ if(MSVC)
                             _HAS_ITERATOR_DEBUGGING=0
                             CEF_USE_ATL
                             CEF_USE_SANDBOX)
+elseif(APPLE)
+    add_compile_definitions(MACOS)
+elseif(UNIX AND NOT APPLE)
+    add_compile_definitions(LINUX)
 endif()

@@ -17,7 +17,7 @@
 class IRender : public CefRenderHandler
 {
 public:
-    IRender(PageOptions settings, PageObserver observer, void* ctx);
+    IRender(const PageOptions* settings, PageObserver observer, void* ctx);
     ~IRender()
     {
         IClose();
@@ -28,7 +28,7 @@ public:
     virtual bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override;
     virtual void OnImeCompositionRangeChanged(CefRefPtr<CefBrowser> browser,
                                               const CefRange& selected_range,
-                                              const RectList& character_bounds);
+                                              const RectList& character_bounds) override;
     virtual void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
     virtual void OnPaint(CefRefPtr<CefBrowser> browser,
                          PaintElementType type,
@@ -42,12 +42,13 @@ public:
     void IClose();
 
 private:
+    bool is_closed = false;
     std::optional<CefRefPtr<CefBrowser>> _browser = std::nullopt;
 
-    bool is_closed = false;
-    PageOptions _settings;
     PageObserver _observer;
     void* _ctx;
+    
+    float _device_scale_factor;
     int _width;
     int _height;
 

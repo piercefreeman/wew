@@ -17,27 +17,28 @@
 #include "render.h"
 #include "webview.h"
 
-class IBrowser : public CefClient,
-    public CefDragHandler,
-    public CefContextMenuHandler,
-    public CefLoadHandler,
-    public CefLifeSpanHandler,
-    public IControl,
-    public IRender,
-    public IDisplay
+class IPage : public CefClient,
+public CefDragHandler,
+public CefContextMenuHandler,
+public CefLoadHandler,
+public CefLifeSpanHandler,
+public IControl,
+public IRender,
+public IDisplay
 {
 public:
-    IBrowser(PageOptions settings,
-             PageObserver observer,
-             void* ctx);
-
-    ~IBrowser()
+    IPage(CefSettings& cef_settings,
+          const PageOptions* settings,
+          PageObserver observer,
+          void* ctx);
+    
+    ~IPage()
     {
         IClose();
     }
-
+    
     /* CefContextMenuHandler */
-
+    
     virtual void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser,
                                      CefRefPtr<CefFrame> frame,
                                      CefRefPtr<CefContextMenuParams> params,
@@ -47,9 +48,9 @@ public:
                                       CefRefPtr<CefContextMenuParams> params,
                                       int command_id,
                                       EventFlags event_flags) override;
-
+    
     /* CefClient */
-
+    
     virtual CefRefPtr<CefDragHandler> GetDragHandler() override;
     virtual CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override;
     virtual CefRefPtr<CefDisplayHandler> GetDisplayHandler() override;
@@ -60,9 +61,9 @@ public:
                                           CefRefPtr<CefFrame> frame,
                                           CefProcessId source_process,
                                           CefRefPtr<CefProcessMessage> message) override;
-
+    
     /* CefLoadHandler */
-
+    
     virtual void OnLoadStart(CefRefPtr<CefBrowser> browser,
                              CefRefPtr<CefFrame> frame,
                              TransitionType transition_type) override;
@@ -74,18 +75,19 @@ public:
                              ErrorCode error_code,
                              const CefString& error_text,
                              const CefString& failed_url) override;
-
+    
     /* CefLifeSpanHandler */
-
-
+    
+    
     virtual void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
     virtual bool DoClose(CefRefPtr<CefBrowser> browser) override;
     virtual void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
     virtual bool OnBeforePopup(CefRefPtr<CefBrowser> browser,
                                CefRefPtr<CefFrame> frame,
+                               int popup_id,
                                const CefString& target_url,
                                const CefString& target_frame_name,
-                               CefLifeSpanHandler::WindowOpenDisposition target_disposition,
+                               WindowOpenDisposition target_disposition,
                                bool user_gesture,
                                const CefPopupFeatures& popupFeatures,
                                CefWindowInfo& windowInfo,
@@ -93,26 +95,26 @@ public:
                                CefBrowserSettings& settings,
                                CefRefPtr<CefDictionaryValue>& extra_info,
                                bool* no_javascript_access) override;
-
+    
     /* CefDragHandler */
-
+    
     virtual bool OnDragEnter(CefRefPtr<CefBrowser> browser,
                              CefRefPtr<CefDragData> dragData,
                              CefDragHandler::DragOperationsMask mask) override;
-
+    
     void IClose();
     void SetDevToolsOpenState(bool is_open);
-    const void* GetHWND();
+    const void* GetWindowHandle();
     void ISendMessage(std::string message);
 private:
-    std::optional<CefRefPtr<CefBrowser>> _browser = std::nullopt;
-
     bool _is_closed = false;
-    PageOptions _settings;
+    std::optional<CefRefPtr<CefBrowser>> _browser = std::nullopt;
+    
+    CefSettings& _cef_settings;
     PageObserver _observer;
     void* _ctx;
-
-    IMPLEMENT_REFCOUNTING(IBrowser);
+    
+    IMPLEMENT_REFCOUNTING(IPage);
 };
 
 #endif  // LIBWEBVIEW_BROWSER_H

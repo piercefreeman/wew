@@ -1,18 +1,31 @@
-use std::sync::Arc;
-
 use raw_window_handle::RawWindowHandle;
-use webview_sys::{Modifiers, TouchEventType, TouchPointerType};
+use webview_sys::{Modifiers, PageState, Rect, TouchEventType, TouchPointerType};
 
-use crate::{ActionState, Error, ImeAction, MouseAction, Observer, Webview};
+use crate::{ActionState, ImeAction, MouseAction};
 
 #[derive(Debug)]
 pub struct PageOptions {
+    /// External native window handle.
     pub window_handle: Option<RawWindowHandle>,
-    pub frame_rate: u32,
+    /// The maximum rate in frames per second (fps) that CefRenderHandler::OnPaint
+    /// will be called for a windowless browser.
+    pub windowless_frame_rate: u32,
+    /// window size width.
     pub width: u32,
+    /// window size height.
     pub height: u32,
+    /// window device scale factor.
     pub device_scale_factor: f32,
-    pub is_offscreen: bool,
+    /// page defalt fixed font size.
+    pub default_font_size: u32,
+    /// page defalt fixed font size.
+    pub default_fixed_font_size: u32,
+    /// Controls whether JavaScript can be executed.
+    pub javascript: bool,
+    /// Controls whether JavaScript can access the clipboard.
+    pub javascript_access_clipboard: bool,
+    /// Controls whether local storage can be used.
+    pub local_storage: bool,
 }
 
 unsafe impl Send for PageOptions {}
@@ -21,14 +34,59 @@ unsafe impl Sync for PageOptions {}
 impl Default for PageOptions {
     fn default() -> Self {
         Self {
-            window_handle: None,
-            frame_rate: 30,
             width: 800,
             height: 600,
+            window_handle: None,
             device_scale_factor: 1.0,
-            is_offscreen: false,
+            windowless_frame_rate: 30,
+            default_font_size: 12,
+            default_fixed_font_size: 12,
+            javascript: true,
+            javascript_access_clipboard: false,
+            local_storage: true,
         }
     }
+}
+
+#[allow(unused)]
+pub trait PageObserver: Send + Sync {
+    /// Implement this interface to handle events related to browser load
+    /// status.
+    ///
+    /// The methods of this class will be called on the browser process UI
+    /// thread or render process main thread (TID_RENDERER).
+    fn on_state_change(&self, state: PageState) {}
+    /// Called when the IME composition range has changed.
+    ///
+    /// selected_range is the range of characters that have been selected.
+    /// |character_bounds| is the bounds of each character in view coordinates.
+    fn on_ime_rect(&self, rect: Rect) {}
+    /// Called when an element should be painted.
+    ///
+    /// Pixel values passed to this method are scaled relative to view
+    /// coordinates based on the value of CefScreenInfo.device_scale_factor
+    /// returned from GetScreenInfo. |type| indicates whether the element is the
+    /// view or the popup widget. |buffer| contains the pixel data for the whole
+    /// image. |dirtyRects| contains the set of rectangles in pixel coordinates
+    /// that need to be repainted. |buffer| will be |width|*|height|*4 bytes in
+    /// size and represents a BGRA image with an upper-left origin. This method
+    /// is only called when CefWindowInfo::shared_texture_enabled is set to
+    /// false.
+    fn on_frame(&self, texture: &[u8], width: u32, height: u32) {}
+    /// Called when the page title changes.
+    fn on_title_change(&self, title: String) {}
+    /// Called when web content in the page has toggled fullscreen mode.
+    ///
+    /// If |fullscreen| is true the content will automatically be sized to fill
+    /// the browser content area. If |fullscreen| is false the content will
+    /// automatically return to its original size and position. With Alloy style
+    /// the client is responsible for triggering the fullscreen transition (for
+    /// example, by calling CefWindow::SetFullscreen when using Views). With
+    /// Chrome style the fullscreen transition will be triggered automatically.
+    /// The CefWindowDelegate::OnWindowFullscreenTransition method will be
+    /// called during the fullscreen transition for notification purposes.
+    fn on_fullscreen_change(&self, fullscreen: bool) {}
+    fn on_message(&self, message: String) {}
 }
 
 /// CefClient
@@ -48,47 +106,25 @@ impl Default for PageOptions {
 ///
 /// An example CefClient implementation can be seen in
 /// cefsimple/simple_handler.h and cefsimple/simple_handler.cc.
-pub struct Page(wrapper::Page);
+pub struct Page(pub(crate) wrapper::Page);
 
 impl Page {
-    /// Create a new browser using the window parameters specified by
-    /// |windowInfo|.
-    ///
-    /// All values will be copied internally and the actual window (if any) will
-    /// be created on the UI thread. If |request_context| is empty the global
-    /// request context will be used. This method can be called on any browser
-    /// process thread and will not block. The optional |extra_info| parameter
-    /// provides an opportunity to specify extra information specific to the
-    /// created browser that will be passed to
-    /// CefRenderProcessHandler::OnBrowserCreated() in the render process.
-    pub(crate) fn new<T>(
-        webview: &Webview,
-        url: &str,
-        options: &PageOptions,
-        observer: T,
-    ) -> Result<Arc<Self>, Error>
-    where
-        T: Observer + 'static,
-    {
-        Ok(Arc::new(Self(webview.0.create_page(url, options, observer))))
-    }
-
     /// Send a mouse click event to the browser.
     ///
     /// Send a mouse move event to the browser.
     ///
     /// Send a mouse wheel event to the browser.
-    pub fn on_mouse(&self, action: MouseAction) {
-        self.0.on_mouse(action);
+    pub fn mouse(&self, action: MouseAction) {
+        self.0.mouse(action);
     }
 
     /// Send a key event to the browser.
-    pub fn on_keyboard(&self, scan_code: u32, state: ActionState, modifiers: Modifiers) {
-        self.0.on_keyboard(scan_code, state, modifiers);
+    pub fn keyboard(&self, scan_code: u32, state: ActionState, modifiers: Modifiers) {
+        self.0.keyboard(scan_code, state, modifiers);
     }
 
     /// Send a touch event to the browser for a windowless browser.
-    pub fn on_touch(
+    pub fn touch(
         &self,
         id: i32,
         x: i32,
@@ -96,7 +132,7 @@ impl Page {
         ty: TouchEventType,
         pointer_type: TouchPointerType,
     ) {
-        self.0.on_touch(id, x, y, ty, pointer_type);
+        self.0.touch(id, x, y, ty, pointer_type);
     }
 
     /// Completes the existing composition by optionally inserting the specified
@@ -126,8 +162,8 @@ impl Page {
     /// (on Mac).
     ///
     /// This method is only used when window rendering is disabled.
-    pub fn on_ime(&self, action: ImeAction) {
-        self.0.on_ime(action);
+    pub fn ime(&self, action: ImeAction) {
+        self.0.ime(action);
     }
 
     /// Notify the browser that the widget has been resized.
@@ -163,9 +199,10 @@ impl Page {
 
 pub(crate) mod wrapper {
     use std::{
-        ffi::{c_int, c_void},
+        ffi::{c_char, c_int, c_void},
         num::NonZeroIsize,
         ptr::null,
+        slice::from_raw_parts,
     };
 
     use raw_window_handle::{RawWindowHandle, Win32WindowHandle};
@@ -173,18 +210,13 @@ pub(crate) mod wrapper {
         close_page, create_page, page_get_hwnd, page_resize, page_send_ime_composition,
         page_send_ime_set_composition, page_send_keyboard, page_send_message,
         page_send_mouse_click, page_send_mouse_click_with_pos, page_send_mouse_move,
-        page_send_mouse_wheel, page_send_touch, page_set_devtools_state, Modifiers,
-        TouchEventType, TouchPointerType,
+        page_send_mouse_wheel, page_send_touch, page_set_devtools_state, Modifiers, PageState,
+        Rect, TouchEventType, TouchPointerType,
     };
 
-    use crate::{
-        ffi,
-        observer::wrapper::create_page_observer,
-        wrapper::Webview,
-        ActionState, ImeAction, MouseAction, Observer,
-    };
+    use crate::{ffi, wrapper::App, ActionState, ImeAction, MouseAction};
 
-    use super::PageOptions;
+    use super::{PageObserver, PageOptions};
 
     /// CefClient
     ///
@@ -204,7 +236,7 @@ pub(crate) mod wrapper {
     /// An example CefClient implementation can be seen in
     /// cefsimple/simple_handler.h and cefsimple/simple_handler.cc.
     pub(crate) struct Page {
-        pub observer: *mut Box<dyn Observer>,
+        pub observer: *mut Box<dyn PageObserver>,
         pub raw: *mut c_void,
     }
 
@@ -213,24 +245,29 @@ pub(crate) mod wrapper {
 
     impl Page {
         pub(crate) fn new<T>(
-            webview: &Webview,
+            app: &App,
             url: &str,
             options: &PageOptions,
             observer: T,
-        ) -> Self
+        ) -> Option<Self>
         where
-            T: Observer + 'static,
+            T: PageObserver + 'static,
         {
             let options = webview_sys::PageOptions {
-                frame_rate: options.frame_rate,
                 width: options.width,
                 height: options.height,
                 device_scale_factor: options.device_scale_factor,
-                is_offscreen: options.is_offscreen,
+                windowless_frame_rate: options.windowless_frame_rate,
+                default_fixed_font_size: options.default_fixed_font_size as c_int,
+                default_font_size: options.default_font_size as c_int,
+                javascript: options.javascript,
+                javascript_access_clipboard: options.javascript_access_clipboard,
+                local_storage: options.local_storage,
                 window_handle: if let Some(it) = options.window_handle {
                     match it {
                         RawWindowHandle::Win32(it) => it.hwnd.get() as _,
-                        _ => unimplemented!(),
+                        RawWindowHandle::AppKit(it) => it.ns_view.as_ptr() as _,
+                        _ => unimplemented!("{:?}", it),
                     }
                 } else {
                     null()
@@ -238,13 +275,20 @@ pub(crate) mod wrapper {
             };
 
             let url = ffi::into(url);
-            let observer: *mut Box<dyn Observer> = Box::into_raw(Box::new(Box::new(observer)));
+            let observer: *mut Box<dyn PageObserver> = Box::into_raw(Box::new(Box::new(observer)));
             let raw = unsafe {
                 create_page(
-                    webview.0,
+                    app.ptr,
                     url,
                     &options,
-                    create_page_observer(),
+                    webview_sys::PageObserver {
+                        on_state_change: Some(on_state_change_callback),
+                        on_ime_rect: Some(on_ime_rect_callback),
+                        on_frame: Some(on_frame_callback),
+                        on_title_change: Some(on_title_change_callback),
+                        on_fullscreen_change: Some(on_fullscreen_change_callback),
+                        on_message: Some(on_message_callback),
+                    },
                     observer as _,
                 )
             };
@@ -253,7 +297,11 @@ pub(crate) mod wrapper {
                 ffi::free(url);
             }
 
-            Self { observer, raw }
+            if raw.is_null() {
+                return None;
+            }
+
+            Some(Self { observer, raw })
         }
 
         pub(crate) fn send_message(&self, message: &str) {
@@ -271,7 +319,7 @@ pub(crate) mod wrapper {
         /// Send a mouse move event to the browser.
         ///
         /// Send a mouse wheel event to the browser.
-        pub fn on_mouse(&self, action: MouseAction) {
+        pub fn mouse(&self, action: MouseAction) {
             match action {
                 MouseAction::Move(pos) => unsafe { page_send_mouse_move(self.raw, pos.x, pos.y) },
                 MouseAction::Wheel(pos) => unsafe { page_send_mouse_wheel(self.raw, pos.x, pos.y) },
@@ -294,14 +342,14 @@ pub(crate) mod wrapper {
         }
 
         /// Send a key event to the browser.
-        pub fn on_keyboard(&self, scan_code: u32, state: ActionState, modifiers: Modifiers) {
+        pub fn keyboard(&self, scan_code: u32, state: ActionState, modifiers: Modifiers) {
             unsafe {
                 page_send_keyboard(self.raw, scan_code as c_int, state.is_pressed(), modifiers)
             }
         }
 
         /// Send a touch event to the browser for a windowless browser.
-        pub fn on_touch(
+        pub fn touch(
             &self,
             id: i32,
             x: i32,
@@ -339,7 +387,7 @@ pub(crate) mod wrapper {
         /// (on Mac).
         ///
         /// This method is only used when window rendering is disabled.
-        pub fn on_ime(&self, action: ImeAction) {
+        pub fn ime(&self, action: ImeAction) {
             let input = match action {
                 ImeAction::Composition(it) | ImeAction::Pre(it, _, _) => ffi::into(it),
             };
@@ -390,6 +438,74 @@ pub(crate) mod wrapper {
             }
 
             drop(unsafe { Box::from_raw(self.observer) });
+        }
+    }
+
+    /// Implement this interface to handle events related to browser load
+    /// status.
+    ///
+    /// The methods of this class will be called on the browser process UI
+    /// thread or render process main thread (TID_RENDERER).
+    extern "C" fn on_state_change_callback(state: PageState, ctx: *mut c_void) {
+        unsafe { &*(ctx as *mut Box<dyn PageObserver>) }.on_state_change(state);
+    }
+
+    /// Called when the IME composition range has changed.
+    ///
+    /// selected_range is the range of characters that have been selected.
+    /// |character_bounds| is the bounds of each character in view coordinates.
+    extern "C" fn on_ime_rect_callback(rect: Rect, ctx: *mut c_void) {
+        (unsafe { &*(ctx as *mut Box<dyn PageObserver>) }).on_ime_rect(rect);
+    }
+
+    /// Called when an element should be painted.
+    ///
+    /// Pixel values passed to this method are scaled relative to view
+    /// coordinates based on the value of CefScreenInfo.device_scale_factor
+    /// returned from GetScreenInfo. |type| indicates whether the element is the
+    /// view or the popup widget. |buffer| contains the pixel data for the whole
+    /// image. |dirtyRects| contains the set of rectangles in pixel coordinates
+    /// that need to be repainted. |buffer| will be |width|*|height|*4 bytes in
+    /// size and represents a BGRA image with an upper-left origin. This method
+    /// is only called when CefWindowInfo::shared_texture_enabled is set to
+    /// false.
+    extern "C" fn on_frame_callback(
+        texture: *const c_void,
+        width: c_int,
+        height: c_int,
+        ctx: *mut c_void,
+    ) {
+        (unsafe { &*(ctx as *mut Box<dyn PageObserver>) }).on_frame(
+            unsafe { from_raw_parts(texture as _, width as usize * height as usize * 4) },
+            width as u32,
+            height as u32,
+        );
+    }
+
+    /// Called when the page title changes.
+    extern "C" fn on_title_change_callback(title: *const c_char, ctx: *mut c_void) {
+        if let Some(title) = ffi::from(title) {
+            (unsafe { &*(ctx as *mut Box<dyn PageObserver>) }).on_title_change(title);
+        }
+    }
+
+    /// Called when web content in the page has toggled fullscreen mode.
+    ///
+    /// If |fullscreen| is true the content will automatically be sized to fill
+    /// the browser content area. If |fullscreen| is false the content will
+    /// automatically return to its original size and position. With Alloy style
+    /// the client is responsible for triggering the fullscreen transition (for
+    /// example, by calling CefWindow::SetFullscreen when using Views). With
+    /// Chrome style the fullscreen transition will be triggered automatically.
+    /// The CefWindowDelegate::OnWindowFullscreenTransition method will be
+    /// called during the fullscreen transition for notification purposes.
+    extern "C" fn on_fullscreen_change_callback(fullscreen: bool, ctx: *mut c_void) {
+        (unsafe { &*(ctx as *mut Box<dyn PageObserver>) }).on_fullscreen_change(fullscreen);
+    }
+
+    extern "C" fn on_message_callback(message: *const c_char, ctx: *mut c_void) {
+        if let Some(message) = ffi::from(message) {
+            (unsafe { &*(ctx as *mut Box<dyn PageObserver>) }).on_message(message);
         }
     }
 }

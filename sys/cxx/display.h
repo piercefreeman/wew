@@ -10,25 +10,26 @@
 class IDisplay : public CefDisplayHandler
 {
 public:
-    IDisplay(PageOptions settings, PageObserver observer, void* ctx);
+    IDisplay(CefSettings& cef_settings, PageObserver observer, void* ctx);
     ~IDisplay()
     {
         IClose();
     }
-
+    
     /* CefDisplayHandler */
-
+    
     virtual void OnTitleChange(CefRefPtr<CefBrowser> browser, const CefString& title) override;
     virtual void OnFullscreenModeChange(CefRefPtr<CefBrowser> browser, bool fullscreen) override;
-
+    
     void IClose();
-
+    
 private:
     bool _is_closed = false;
-    PageOptions _settings;
+    
+    CefSettings& _cef_settings;
     PageObserver _observer;
     void* _ctx;
-
+    
     IMPLEMENT_REFCOUNTING(IDisplay);
 };
 

@@ -29,43 +29,57 @@ fn exec(command: &str, work_dir: &str) -> Result<String> {
     }
 }
 
-#[cfg(target_os = "windows")]
-static URL: &'static str =
-    "https://github.com/mycrl/webview-rs/releases/download/distributions/cef-windows.zip";
+static URL: &'static str = "https://github.com/mycrl/webview-rs/releases/download/distributions";
 
-#[cfg(target_os = "macos")]
-static URL: &'static str =
-    "https://github.com/mycrl/webview-rs/releases/download/distributions/cef-macos.zip";
-
-#[rustfmt::skip]
 fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=./cxx");
     println!("cargo:rerun-if-changed=./src");
     println!("cargo:rerun-if-changed=./build.rs");
 
-    let target = env::var("TARGET")?;
     let out_dir = env::var("OUT_DIR")?;
     let cef_path: &str = &join(&out_dir, "cef");
 
     #[cfg(target_os = "windows")]
     if !is_exsit(cef_path) {
-        exec(&format!("Invoke-WebRequest -Uri {} -OutFile ./cef.zip", URL), &out_dir)?;
+        exec(
+            &format!(
+                "Invoke-WebRequest -Uri {URL}/cef-windows-{}.zip -OutFile ./cef.zip",
+                env::var("CARGO_CFG_TARGET_ARCH")?
+            ),
+            &out_dir,
+        )?;
+
         exec("Expand-Archive -Path cef.zip -DestinationPath ./", &out_dir)?;
         exec("Remove-Item ./cef.zip", &out_dir)?;
     }
-    
+
     #[cfg(target_os = "macos")]
     if !is_exsit(cef_path) {
-        exec(&format!("wget {} -O ./cef.zip", URL), &out_dir)?;
+        exec(
+            &format!(
+                "wget {URL}/cef-macos-{}.zip -O ./cef.zip",
+                env::var("CARGO_CFG_TARGET_ARCH")?
+            ),
+            &out_dir,
+        )?;
+
         exec("tar -xf ./cef.zip -C ./", &out_dir)?;
         exec("rm -f ./cef.zip", &out_dir)?;
-        exec("mv ./cef/Release/cef_sandbox.a ./cef/Release/libcef_sandbox.a", &out_dir)?;
+        exec(
+            "mv ./cef/Release/cef_sandbox.a ./cef/Release/libcef_sandbox.a",
+            &out_dir,
+        )?;
     }
 
     if !is_exsit(&join(cef_path, "./libcef_dll_wrapper")) {
         #[cfg(not(target_os = "windows"))]
-        exec("cmake -DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\" -DCMAKE_BUILD_TYPE=Release .", cef_path)?;
-        
+        exec(
+            "cmake \
+            -DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\" \
+            -DCMAKE_BUILD_TYPE=Release .",
+            cef_path,
+        )?;
+
         #[cfg(target_os = "windows")]
         exec("cmake -DCMAKE_BUILD_TYPE=Release .", cef_path)?;
 
@@ -73,7 +87,9 @@ fn main() -> Result<()> {
     }
 
     bindgen::Builder::default()
-        .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: false })
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: false,
+        })
         .prepend_enum_name(false)
         .derive_eq(true)
         .size_t_is_usize(true)
@@ -90,7 +106,7 @@ fn main() -> Result<()> {
         cfgs.cpp(true)
             .debug(is_debug)
             .static_crt(true)
-            .target(&target)
+            .target(&env::var("TARGET")?)
             .warnings(false)
             .out_dir(&out_dir);
 
@@ -101,7 +117,7 @@ fn main() -> Result<()> {
         }
 
         cfgs.file("./cxx/app.cpp")
-            .file("./cxx/browser.cpp")
+            .file("./cxx/page.cpp")
             .file("./cxx/control.cpp")
             .file("./cxx/render.cpp")
             .file("./cxx/display.cpp")
@@ -133,12 +149,11 @@ fn main() -> Result<()> {
         cfgs.define("LINUX", Some("1")).define("CEF_X11", Some("1"));
 
         #[cfg(target_os = "macos")]
-        cfgs.define("MACOS", Some("1"))
-            .define("CEF_USE_SANDBOX", Some("1"));
+        cfgs.define("MACOS", Some("1"));
 
         cfgs.compile("sys");
     }
-    
+
     println!("cargo:rustc-link-lib=static=sys");
     println!("cargo:rustc-link-search=all={}", &out_dir);
 
@@ -150,8 +165,15 @@ fn main() -> Result<()> {
         println!("cargo:rustc-link-lib=winmm");
         println!("cargo:rustc-link-lib=user32");
         println!("cargo:rustc-link-arg=/NODEFAULTLIB:libcmt.lib");
-        println!("cargo:rustc-link-search=all={}", join(cef_path, "./libcef_dll_wrapper/Release"));
-        println!("cargo:rustc-link-search=all={}", join(cef_path, "./Release"));
+        println!(
+            "cargo:rustc-link-search=all={}",
+            join(cef_path, "./libcef_dll_wrapper/Release")
+        );
+
+        println!(
+            "cargo:rustc-link-search=all={}",
+            join(cef_path, "./Release")
+        );
     }
 
     #[cfg(target_os = "linux")]
@@ -164,14 +186,21 @@ fn main() -> Result<()> {
     #[cfg(target_os = "macos")]
     {
         println!("cargo:rustc-link-lib=framework=Chromium Embedded Framework");
-        println!("cargo:rustc-link-search=framework={}", join(cef_path, "./Release"));
+        println!(
+            "cargo:rustc-link-search=framework={}",
+            join(cef_path, "./Release")
+        );
 
         println!("cargo:rustc-link-lib=cef_dll_wrapper");
-        println!("cargo:rustc-link-search=all={}",join(cef_path, "./libcef_dll_wrapper"));
+        println!(
+            "cargo:rustc-link-search=all={}",
+            join(cef_path, "./libcef_dll_wrapper")
+        );
 
-        println!("cargo:rustc-link-lib=cef_sandbox");
-        println!("cargo:rustc-link-lib=sandbox");
-        println!("cargo:rustc-link-search=native={}", join(cef_path, "Release"));
+        println!(
+            "cargo:rustc-link-search=native={}",
+            join(cef_path, "Release")
+        );
     }
 
     Ok(())

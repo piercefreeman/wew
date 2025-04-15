@@ -6,38 +6,33 @@ use std::{
 
 use minifb::{MouseButton, MouseMode, Window, WindowOptions};
 use webview::{
-    execute_subprocess, is_subprocess, ActionState, MouseAction, MouseButtons, Observer,
-    PageOptions, Position, Webview, WebviewOptions,
+    execute_subprocess, is_subprocess, ActionState, App, AppObserver, AppOptions, MouseAction,
+    MouseButtons, PageObserver, PageOptions, Position,
 };
 
-struct PageObserver {
+struct ImplPageObserver {
     sender: Sender<Vec<u8>>,
 }
 
-impl Observer for PageObserver {
+impl PageObserver for ImplPageObserver {
     fn on_frame(&self, buf: &[u8], _: u32, _: u32) {
         self.sender.send(buf.to_vec()).unwrap();
     }
 }
 
+struct ImplAppObserver;
+
+impl AppObserver for ImplAppObserver {}
+
 fn run_cef() -> anyhow::Result<()> {
     let (sender, receiver) = channel();
-    let app = Webview::new(&WebviewOptions {
-        cache_path: None,
-        browser_subprocess_path: None,
-        scheme_path: None,
-    })?;
+    let app = App::new(&AppOptions::default(), ImplAppObserver).unwrap();
 
-    let settings = PageOptions {
-        frame_rate: 30,
-        width: 800,
-        height: 600,
-        device_scale_factor: 1.0,
-        is_offscreen: false,
-        window_handle: None,
-    };
+    let settings = PageOptions::default();
 
-    let browser = app.create_page("https://google.com", &settings, PageObserver { sender })?;
+    let browser = app
+        .create_page("https://google.com", &settings, ImplPageObserver { sender })
+        .unwrap();
     thread::spawn(move || {
         let mut window = Window::new(
             "simple",
@@ -47,7 +42,7 @@ fn run_cef() -> anyhow::Result<()> {
         )?;
 
         window.limit_update_rate(Some(Duration::from_millis(
-            1000 / settings.frame_rate as u64,
+            1000 / settings.windowless_frame_rate as u64,
         )));
 
         let mut frame = vec![0u8; (settings.width * settings.height * 4) as usize];
@@ -57,13 +52,13 @@ fn run_cef() -> anyhow::Result<()> {
                 .map(|(x, y)| (x as i32, y as i32))
             {
                 if window.get_mouse_down(MouseButton::Left) {
-                    browser.on_mouse(MouseAction::Click(
+                    browser.mouse(MouseAction::Click(
                         MouseButtons::kLeft,
                         ActionState::Down,
                         Some(Position { x, y }),
                     ));
 
-                    browser.on_mouse(MouseAction::Click(
+                    browser.mouse(MouseAction::Click(
                         MouseButtons::kLeft,
                         ActionState::Up,
                         None,
@@ -77,14 +72,16 @@ fn run_cef() -> anyhow::Result<()> {
 
             let (_, shorts, _) = unsafe { frame.align_to::<u32>() };
             window.update_with_buffer(shorts, settings.width as usize, settings.height as usize)?;
-            thread::sleep(Duration::from_millis(1000 / settings.frame_rate as u64));
+            thread::sleep(Duration::from_millis(
+                1000 / settings.windowless_frame_rate as u64,
+            ));
         }
 
         #[allow(unreachable_code)]
         Ok::<(), anyhow::Error>(())
     });
 
-    Webview::run();
+    App::run();
     Ok(())
 }
 

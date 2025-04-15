@@ -9,56 +9,40 @@
 #define LIBWEBVIEW_APP_H
 #pragma once
 
-#include "browser.h"
+#include "page.h"
 #include "include/cef_app.h"
 #include "webview.h"
 
 class IApp : public CefApp, public CefBrowserProcessHandler
 {
 public:
-    IApp(const WebviewOptions* settings, CreateWebviewCallback callback, void* ctx);
+    IApp(const AppOptions* settings, AppObserver observer, void* ctx);
     ~IApp()
     {
     }
-
+    
     /* CefApp */
-
+    
     void OnRegisterCustomSchemes(CefRawPtr<CefSchemeRegistrar> registrar) override;
-
-    //
-    // Return the handler for functionality specific to the browser process. This
-    // method is called on multiple threads in the browser process.
-    //
     CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override;
-
+    
     /* CefBrowserProcessHandler */
-
-    //
-    // Called on the browser process UI thread immediately after the CEF context
-    // has been initialized.
-    //
+    
     void OnContextInitialized() override;
-
-    //
-    // Return the default client for use with a newly created browser window. If
-    // null is returned the browser will be unmanaged (no callbacks will be
-    // executed for that browser) and application shutdown will be blocked until
-    // the browser window is closed manually. This method is currently only used
-    // with the chrome runtime.
-    //
     CefRefPtr<CefClient> GetDefaultClient() override;
-
-    CefRefPtr<IBrowser> CreateBrowser(std::string url,
-                                      const PageOptions* settings,
-                                      PageObserver observer,
-                                      void* ctx);
-
+    void OnScheduleMessagePumpWork(int64_t delay_ms) override;
+    
+    CefRefPtr<IPage> CreatePage(std::string url,
+                                const PageOptions* settings,
+                                PageObserver observer,
+                                void* ctx);
+    
     CefSettings cef_settings;
 private:
-    std::optional<std::string> _scheme_path = std::nullopt;
-    CreateWebviewCallback _callback;
+    std::optional<std::string> _scheme_dir_path = std::nullopt;
+    AppObserver _observer;
     void* _ctx;
-
+    
     IMPLEMENT_REFCOUNTING(IApp);
 };
 
@@ -68,22 +52,22 @@ public:
     MessageSendFunction()
     {
     }
-
+    
     /* CefV8Handler */
-
+    
     bool Execute(const CefString& name,
                  CefRefPtr<CefV8Value> object,
                  const CefV8ValueList& arguments,
                  CefRefPtr<CefV8Value>& retval,
-                 CefString& exception);
-
+                 CefString& exception) override;
+    
     void SetBrowser(CefRefPtr<CefBrowser> browser)
     {
         _browser = std::optional(browser);
     }
 private:
     std::optional<CefRefPtr<CefBrowser>> _browser = std::nullopt;
-
+    
     IMPLEMENT_REFCOUNTING(MessageSendFunction);
 };
 
@@ -93,20 +77,20 @@ public:
     MessageOnFunction()
     {
     }
-
+    
     /* CefV8Handler */
-
+    
     bool Execute(const CefString& name,
                  CefRefPtr<CefV8Value> object,
                  const CefV8ValueList& arguments,
                  CefRefPtr<CefV8Value>& retval,
-                 CefString& exception);
-
+                 CefString& exception) override;
+    
     void Call(std::string message);
 private:
     std::optional<CefRefPtr<CefV8Context>> _context = std::nullopt;
     std::optional<CefRefPtr<CefV8Value>> _callback = std::nullopt;
-
+    
     IMPLEMENT_REFCOUNTING(MessageOnFunction);
 };
 
@@ -114,29 +98,24 @@ class IRenderApp : public CefApp, public CefRenderProcessHandler
 {
 public:
     /* CefApp */
-
+    
     void OnRegisterCustomSchemes(CefRawPtr<CefSchemeRegistrar> registrar) override;
-
-    ///
-    /// Return the handler for functionality specific to the render process. This
-    /// method is called on the render process main thread.
-    ///
     CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override;
-
+    
     /* CefRenderProcessHandler */
-
+    
     void OnContextCreated(CefRefPtr<CefBrowser> browser,
                           CefRefPtr<CefFrame> frame,
-                          CefRefPtr<CefV8Context> context);
+                          CefRefPtr<CefV8Context> context) override;
     bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
                                   CefRefPtr<CefFrame> frame,
                                   CefProcessId source_process,
-                                  CefRefPtr<CefProcessMessage> message);
-
+                                  CefRefPtr<CefProcessMessage> message) override;
+    
 private:
     CefRefPtr<MessageSendFunction> _send_func = new MessageSendFunction();
     CefRefPtr<MessageOnFunction> _on_func = new MessageOnFunction();
-
+    
     IMPLEMENT_REFCOUNTING(IRenderApp);
 };
 

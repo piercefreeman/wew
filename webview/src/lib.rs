@@ -1,17 +1,13 @@
-mod observer;
 mod page;
 
 use std::{
     env::args,
     ffi::{c_char, c_int},
-    sync::{mpsc::channel, Arc},
+    sync::Arc,
     thread,
 };
 
-pub use self::{
-    observer::Observer,
-    page::{Page, PageOptions},
-};
+pub use self::page::{Page, PageObserver, PageOptions};
 
 pub use webview_sys::{Modifiers, MouseButtons, PageState, TouchEventType, TouchPointerType};
 
@@ -77,7 +73,7 @@ impl Args {
 /// webview sub process does not work in tokio runtime!
 pub fn execute_subprocess() -> ! {
     let args = Args::default();
-    unsafe { webview_sys::execute_sub_process(args.len(), args.as_ptr()) };
+    unsafe { webview_sys::execute_subprocess(args.len(), args.as_ptr()) };
     unreachable!("sub process closed, this is a bug!")
 }
 
@@ -86,24 +82,21 @@ pub fn is_subprocess() -> bool {
 }
 
 #[derive(Debug, Default)]
-pub struct WebviewOptions<'a> {
-    pub cache_path: Option<&'a str>,
+pub struct AppOptions<'a> {
+    pub windowless_rendering_enabled: bool,
+    pub cache_dir_path: Option<&'a str>,
     pub browser_subprocess_path: Option<&'a str>,
-    pub scheme_path: Option<&'a str>,
+    pub scheme_dir_path: Option<&'a str>,
+    #[cfg(target_os = "macos")]
+    pub framework_dir_path: Option<&'a str>,
+    #[cfg(target_os = "macos")]
+    pub main_bundle_path: Option<&'a str>,
 }
 
-#[derive(Debug)]
-pub enum Error {
-    CreateWebviewError,
-    CreatePageError,
-}
-
-impl std::error::Error for Error {}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
+#[allow(unused_variables)]
+pub trait AppObserver {
+    fn on_context_initialized(&self) {}
+    fn on_schedule_message_pump_work(&self, delay: u64) {}
 }
 
 /// CefApp
@@ -128,30 +121,30 @@ impl std::fmt::Display for Error {
 ///
 /// An example CefApp implementation can be seen in cefsimple/simple_app.h and
 /// cefsimple/simple_app.cc.
-pub struct Webview(Arc<wrapper::Webview>);
+pub struct App(Arc<wrapper::App>);
 
-impl Webview {
-    pub fn new(options: &WebviewOptions<'_>) -> Result<Self, Error> {
-        let (tx, rx) = channel();
-        let inner = if let Some(it) = wrapper::Webview::new(&options, tx) {
+impl App {
+    pub fn new<T>(options: &AppOptions<'_>, observer: T) -> Option<Self>
+    where
+        T: AppObserver + Send + Sync + 'static,
+    {
+        let inner = if let Some(it) = wrapper::App::new(&options, observer) {
             it
         } else {
-            return Err(Error::CreateWebviewError);
+            return None;
         };
 
         let inner = Arc::new(inner);
         if cfg!(target_os = "windows") {
             let inner_ = inner.clone();
             thread::spawn(move || {
-                inner_.start();
+                inner_.execute();
             });
         } else {
-            inner.start();
+            inner.execute();
         }
 
-        rx.recv()
-            .map(|_| Self(inner))
-            .map_err(|_| Error::CreateWebviewError)
+        Some(Self(inner))
     }
 
     /// Create a new browser using the window parameters specified by
@@ -164,16 +157,13 @@ impl Webview {
     /// provides an opportunity to specify extra information specific to the
     /// created browser that will be passed to
     /// CefRenderProcessHandler::OnBrowserCreated() in the render process.
-    pub fn create_page<T>(
-        &self,
-        url: &str,
-        settings: &PageOptions,
-        observer: T,
-    ) -> Result<Arc<Page>, Error>
+    pub fn create_page<T>(&self, url: &str, options: &PageOptions, observer: T) -> Option<Page>
     where
-        T: Observer + 'static,
+        T: PageObserver + 'static,
     {
-        Page::new(&self, url, settings, observer)
+        self.0
+            .create_page(url, options, observer)
+            .map(|it| Page(it))
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -187,23 +177,22 @@ impl Webview {
     }
 }
 
-impl Drop for Webview {
+impl Drop for App {
     fn drop(&mut self) {
         wrapper::MessageLoop::quit();
     }
 }
 
 pub(crate) mod wrapper {
-    use std::{
-        ffi::c_void,
-        sync::mpsc::Sender,
-    };
+    use std::ffi::c_void;
 
     use webview_sys::{
-        close_app, create_app, poll_message_loop, quit_message_loop, run_message_loop, start_app,
+        close_app, create_app, execute_app, poll_message_loop, quit_message_loop, run_message_loop,
     };
 
-    use crate::{ffi, page::wrapper::Page, Args, Observer, PageOptions, WebviewOptions};
+    use crate::{
+        ffi, page::wrapper::Page, AppObserver, AppOptions, Args, PageObserver, PageOptions,
+    };
 
     pub struct MessageLoop;
 
@@ -243,38 +232,59 @@ pub(crate) mod wrapper {
     ///
     /// An example CefApp implementation can be seen in cefsimple/simple_app.h and
     /// cefsimple/simple_app.cc.
-    pub(crate) struct Webview(pub *mut c_void);
+    pub(crate) struct App {
+        observer: *mut Box<dyn AppObserver>,
+        pub ptr: *mut c_void,
+    }
 
-    unsafe impl Send for Webview {}
-    unsafe impl Sync for Webview {}
+    unsafe impl Send for App {}
+    unsafe impl Sync for App {}
 
-    impl Webview {
-        pub(crate) fn new(options: &WebviewOptions, tx: Sender<()>) -> Option<Self> {
-            let mut options = webview_sys::WebviewOptions {
-                cache_path: ffi::into_opt(options.cache_path),
-                scheme_path: ffi::into_opt(options.scheme_path),
+    impl App {
+        pub(crate) fn new<T>(options: &AppOptions, observer: T) -> Option<Self>
+        where
+            T: AppObserver + Send + Sync + 'static,
+        {
+            let mut options = webview_sys::AppOptions {
+                cache_dir_path: ffi::into_opt(options.cache_dir_path),
+                scheme_dir_path: ffi::into_opt(options.scheme_dir_path),
                 browser_subprocess_path: ffi::into_opt(options.browser_subprocess_path),
+                windowless_rendering_enabled: options.windowless_rendering_enabled,
+                external_message_pump: cfg!(target_os = "macos"),
+                multi_threaded_message_loop: !cfg!(target_os = "macos"),
+                #[cfg(target_os = "macos")]
+                main_bundle_path: ffi::into_opt(options.main_bundle_path),
+                #[cfg(target_os = "macos")]
+                framework_dir_path: ffi::into_opt(options.framework_dir_path),
+                #[cfg(not(target_os = "macos"))]
+                main_bundle_path: None,
+                #[cfg(not(target_os = "macos"))]
+                framework_dir_path: None,
             };
 
-            let raw = unsafe {
+            let observer: *mut Box<dyn AppObserver> = Box::into_raw(Box::new(Box::new(observer)));
+            let ptr = unsafe {
                 create_app(
                     &mut options,
-                    Some(create_webview_callback),
-                    Box::into_raw(Box::new(tx)) as *mut _,
+                    webview_sys::AppObserver {
+                        on_context_initialized: Some(on_context_initialized),
+                        on_schedule_message_pump_work: Some(on_schedule_message_pump_work),
+                    },
+                    observer as _,
                 )
             };
 
             {
-                ffi::free(options.cache_path);
-                ffi::free(options.scheme_path);
+                ffi::free(options.cache_dir_path);
+                ffi::free(options.scheme_dir_path);
                 ffi::free(options.browser_subprocess_path);
             }
 
-            if raw.is_null() {
+            if ptr.is_null() {
                 return None;
             }
 
-            Some(Self(raw))
+            Some(Self { observer, ptr })
         }
 
         /// Create a new browser using the window parameters specified by
@@ -292,36 +302,37 @@ pub(crate) mod wrapper {
             url: &str,
             options: &PageOptions,
             observer: T,
-        ) -> Page
+        ) -> Option<Page>
         where
-            T: Observer + 'static,
+            T: PageObserver + 'static,
         {
             Page::new(&self, url, options, observer)
         }
 
-        pub(crate) fn start(&self) {
+        pub(crate) fn execute(&self) {
             let args = Args::default();
             unsafe {
-                start_app(self.0, args.len(), args.as_ptr());
+                execute_app(self.ptr, args.len(), args.as_ptr());
             }
         }
     }
 
-    impl Drop for Webview {
+    impl Drop for App {
         fn drop(&mut self) {
             unsafe {
-                close_app(self.0);
+                close_app(self.ptr);
             }
+
+            drop(unsafe { Box::from_raw(self.observer) });
         }
     }
 
-    extern "C" fn create_webview_callback(ctx: *mut c_void) {
-        if let Err(e) = unsafe { Box::from_raw(ctx as *mut Sender<()>) }.send(()) {
-            log::error!(
-                "An error occurred when webview pushed a message to the callback. error={:?}",
-                e
-            );
-        }
+    extern "C" fn on_context_initialized(ctx: *mut c_void) {
+        unsafe { &*(ctx as *mut Box<dyn AppObserver>) }.on_context_initialized();
+    }
+
+    extern "C" fn on_schedule_message_pump_work(delay: i64, ctx: *mut c_void) {
+        unsafe { &*(ctx as *mut Box<dyn AppObserver>) }.on_schedule_message_pump_work(delay as u64);
     }
 }
 

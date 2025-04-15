@@ -10,48 +10,44 @@
 
 #ifdef MACOS
 #include "include/wrapper/cef_library_loader.h"
-#include "include/cef_sandbox_mac.h"
 #endif
 
 typedef struct
 {
-    CefRefPtr<IBrowser> ref;
-} Browser;
+    CefRefPtr<IPage> ref;
+} Page;
 
 CefMainArgs get_main_args(int argc, const char** argv)
 {
 #ifdef WIN32
     CefMainArgs main_args(::GetModuleHandleW(nullptr));
 #else
-    CefMainArgs main_args(argc, (char**)argv);
+    CefMainArgs main_args(argc, const_cast<char**>(argv));
 #endif
-
+    
     return main_args;
 }
 
-void run_message_loop() {
+void run_message_loop()
+{
     CefRunMessageLoop();
 }
 
-void quit_message_loop() {
+void quit_message_loop()
+{
     CefQuitMessageLoop();
 }
 
-void poll_message_loop() {
+void poll_message_loop()
+{
     CefDoMessageLoopWork();
 }
 
-void execute_sub_process(int argc, const char** argv)
+void execute_subprocess(int argc, const char** argv)
 {
 #ifdef MACOS
-    CefScopedSandboxContext sandbox_context;
-    if (!sandbox_context.Initialize(argc, (char**)argv))
-    {
-        return;
-    }
-
     CefScopedLibraryLoader library_loader;
-    if (!library_loader.LoadInHelper()) 
+    if (!library_loader.LoadInHelper())
     {
         return;
     }
@@ -60,188 +56,163 @@ void execute_sub_process(int argc, const char** argv)
     CefExecuteProcess(main_args, new IRenderApp, nullptr);
 }
 
-void* create_app(const WebviewOptions* settings, CreateWebviewCallback callback, void* ctx)
+void* create_app(const AppOptions* settings, AppObserver observer, void* ctx)
 {
 #ifdef MACOS
     CefScopedLibraryLoader library_loader;
-    if (!library_loader.LoadInMain()) 
+    if (!library_loader.LoadInMain())
     {
         return nullptr;
     }
 #endif
-
+    
     assert(settings != nullptr);
-    assert(callback != nullptr);
-
-    App* app = new App;
-    app->ref = new IApp(settings, callback, ctx);
+    
+    App* app = new App {new IApp(settings, observer, ctx)};
     return app;
 }
 
-void start_app(void* app_ptr, int argc, const char** argv) {
-    assert(app_ptr != nullptr);
-
-    auto app = (App*)app_ptr;
+void execute_app(void* ptr, int argc, const char** argv) {
+    assert(ptr != nullptr);
+    
+    auto app = static_cast<App*>(ptr);
     auto main_args = get_main_args(argc, argv);
     CefExecuteProcess(main_args, app->ref, nullptr);
     CefInitialize(main_args, app->ref->cef_settings, app->ref, nullptr);
 }
 
-void close_app(void* app_ptr)
+void close_app(void* ptr)
 {
-    assert(app_ptr != nullptr);
-
+    assert(ptr != nullptr);
+    
     CefShutdown();
-
-    auto app = (App*)app_ptr;
-    delete app;
+    
+    delete static_cast<App*>(ptr);
 }
 
-void* create_page(void* app_ptr,
+void* create_page(void* ptr,
                   const char* url,
                   const PageOptions* settings,
                   PageObserver observer,
                   void* ctx)
 {
-    assert(app_ptr != nullptr);
+    assert(ptr != nullptr);
     assert(settings != nullptr);
-
-    auto app = (App*)app_ptr;
-
-    Browser* browser = new Browser;
-    browser->ref = app->ref->CreateBrowser(std::string(url), settings, observer, ctx);
-    return browser;
+    
+    Page* page = new Page{static_cast<App*>(ptr)->ref->CreatePage(std::string(url),
+                                                                  settings,
+                                                                  observer,
+                                                                  ctx)};
+    return page;
 }
 
-void close_page(void* browser)
+void close_page(void* ptr)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
+    assert(ptr != nullptr);
+    
+    auto page = static_cast<Page*>(ptr);
     page->ref->IClose();
     delete page;
 }
 
-void page_send_mouse_click(void* browser, MouseButtons button, bool pressed)
+void page_send_mouse_click(void* ptr, MouseButtons button, bool pressed)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->OnMouseClick(button, pressed);
+    assert(ptr != nullptr);
+    
+    static_cast<Page*>(ptr)->ref->OnMouseClick(button, pressed);
 }
 
-void page_send_mouse_click_with_pos(void* browser,
+void page_send_mouse_click_with_pos(void* ptr,
                                     MouseButtons button,
                                     bool pressed,
                                     int x,
                                     int y)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->OnMouseClickWithPosition(button, x, y, pressed);
+    assert(ptr != nullptr);
+    
+    static_cast<Page*>(ptr)->ref->OnMouseClickWithPosition(button, x, y, pressed);
 }
 
-void page_send_mouse_wheel(void* browser, int x, int y)
+void page_send_mouse_wheel(void* ptr, int x, int y)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->OnMouseWheel(x, y);
+    assert(ptr != nullptr);
+    
+    static_cast<Page*>(ptr)->ref->OnMouseWheel(x, y);
 }
 
-void page_send_mouse_move(void* browser, int x, int y)
+void page_send_mouse_move(void* ptr, int x, int y)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->OnMouseMove(x, y);
+    assert(ptr != nullptr);
+    
+    static_cast<Page*>(ptr)->ref->OnMouseMove(x, y);
 }
 
-void page_send_keyboard(void* browser, int scan_code, bool pressed, Modifiers modifiers)
+void page_send_keyboard(void* ptr, int scan_code, bool pressed, Modifiers modifiers)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->OnKeyboard(scan_code, pressed, modifiers);
+    assert(ptr != nullptr);
+    
+    static_cast<Page*>(ptr)->ref->OnKeyboard(scan_code, pressed, modifiers);
 }
 
-void page_send_touch(void* browser,
+void page_send_touch(void* ptr,
                      int id,
                      int x,
                      int y,
                      TouchEventType type,
                      TouchPointerType pointer_type)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
+    assert(ptr != nullptr);
+    
     // TouchEventType have the same value with cef_touch_event_type_t.
     // Same as TouchPointerType.
-    page->ref->OnTouch(id, x, y, (cef_touch_event_type_t)type, (cef_pointer_type_t)pointer_type);
+    static_cast<Page*>(ptr)->ref->OnTouch(id,
+                                          x,
+                                          y,
+                                          static_cast<cef_touch_event_type_t>(type),
+                                          static_cast<cef_pointer_type_t>(pointer_type));
 }
 
-void page_send_message(void* browser, const char* message)
+void page_send_message(void* ptr, const char* message)
 {
-    assert(browser != nullptr);
+    assert(ptr != nullptr);
     assert(message != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->ISendMessage(std::string(message));
+    
+    static_cast<Page*>(ptr)->ref->ISendMessage(std::string(message));
 }
 
-void page_set_devtools_state(void* browser, bool is_open)
+void page_set_devtools_state(void* ptr, bool is_open)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->SetDevToolsOpenState(is_open);
+    assert(ptr != nullptr);
+    
+    static_cast<Page*>(ptr)->ref->SetDevToolsOpenState(is_open);
 }
 
-void page_resize(void* browser, int width, int height)
+void page_resize(void* ptr, int width, int height)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->Resize(width, height);
+    assert(ptr != nullptr);
+    
+    static_cast<Page*>(ptr)->ref->Resize(width, height);
 }
 
-const void* page_get_hwnd(void* browser)
+const void* page_get_hwnd(void* ptr)
 {
-    assert(browser != nullptr);
-
-    auto page = (Browser*)browser;
-
-    auto hwnd = page->ref->GetHWND();
-    return (void*)hwnd;
+    assert(ptr != nullptr);
+    
+    return static_cast<Page*>(ptr)->ref->GetWindowHandle();
 }
 
-void page_send_ime_composition(void* browser, const char* input)
+void page_send_ime_composition(void* ptr, const char* input)
 {
-    assert(browser != nullptr);
+    assert(ptr != nullptr);
     assert(input != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->OnIMEComposition(std::string(input));
+    
+    static_cast<Page*>(ptr)->ref->OnIMEComposition(std::string(input));
 }
 
-void page_send_ime_set_composition(void* browser, const char* input, int x, int y)
+void page_send_ime_set_composition(void* ptr, const char* input, int x, int y)
 {
-    assert(browser != nullptr);
+    assert(ptr != nullptr);
     assert(input != nullptr);
-
-    auto page = (Browser*)browser;
-
-    page->ref->OnIMESetComposition(std::string(input), x, y);
+    
+    static_cast<Page*>(ptr)->ref->OnIMESetComposition(std::string(input), x, y);
 }

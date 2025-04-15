@@ -6,43 +6,49 @@
 //
 
 #include "app.h"
-
 #include "include/wrapper/cef_helpers.h"
 #include "scheme_handler.h"
 
-IApp::IApp(const WebviewOptions* settings, CreateWebviewCallback callback, void* ctx)
-    : _callback(callback), _ctx(ctx)
+IApp::IApp(const AppOptions* settings, AppObserver observer, void* ctx)
+: _observer(observer), _ctx(ctx)
 {
     assert(settings != nullptr);
-
-    cef_settings.windowless_rendering_enabled = true;
-    cef_settings.chrome_runtime = false;
-    cef_settings.no_sandbox = false;
-    cef_settings.background_color = 0x00ffffff;
-
-    // macos not support the multi threaded message loop.
-#ifdef MACOS
-    cef_settings.multi_threaded_message_loop = false;
-#else
-    cef_settings.multi_threaded_message_loop = true;
-#endif
-
-    CefString(&cef_settings.locale).FromString("zh-CN");
-
-    if (settings->cache_path != nullptr)
+    
+    cef_settings.no_sandbox = true;
+    cef_settings.command_line_args_disabled = true;
+    cef_settings.windowless_rendering_enabled = settings->windowless_rendering_enabled;
+    cef_settings.multi_threaded_message_loop = settings->multi_threaded_message_loop;
+    cef_settings.external_message_pump = settings->external_message_pump;
+    cef_settings.background_color = 0xFF;
+    
+    CefString(&cef_settings.locale).FromString("en-US");
+    
+    if (settings->cache_dir_path != nullptr)
     {
-        CefString(&cef_settings.cache_path).FromString(settings->cache_path);
-        CefString(&cef_settings.log_file).FromString(std::string(settings->cache_path) + "/webview.log");
+        CefString(&cef_settings.cache_path).FromString(settings->cache_dir_path);
+        CefString(&cef_settings.root_cache_path).FromString(settings->cache_dir_path);
     }
-
+    
     if (settings->browser_subprocess_path != nullptr)
     {
         CefString(&cef_settings.browser_subprocess_path).FromString(settings->browser_subprocess_path);
     }
-
-    if (settings->scheme_path != nullptr)
+    
+#ifdef MACOS
+    if (settings->framework_dir_path != nullptr)
     {
-        _scheme_path = std::string(settings->scheme_path);
+        CefString(&cef_settings.framework_dir_path).FromString(settings->framework_dir_path);
+    }
+    
+    if (settings->main_bundle_path != nullptr)
+    {
+        CefString(&cef_settings.main_bundle_path).FromString(settings->main_bundle_path);
+    }
+#endif
+    
+    if (settings->scheme_dir_path != nullptr)
+    {
+        _scheme_dir_path = std::string(settings->scheme_dir_path);
     }
 }
 
@@ -54,13 +60,13 @@ CefRefPtr<CefBrowserProcessHandler> IApp::GetBrowserProcessHandler()
 void IApp::OnContextInitialized()
 {
     CEF_REQUIRE_UI_THREAD();
-
-    if (_scheme_path.has_value())
+    
+    if (_scheme_dir_path.has_value())
     {
-        RegisterSchemeHandlerFactory(_scheme_path.value());
+        RegisterSchemeHandlerFactory(_scheme_dir_path.value());
     }
-
-    _callback(_ctx);
+    
+    _observer.on_context_initialized(_ctx);
 }
 
 CefRefPtr<CefClient> IApp::GetDefaultClient()
@@ -68,45 +74,54 @@ CefRefPtr<CefClient> IApp::GetDefaultClient()
     return nullptr;
 }
 
-CefRefPtr<IBrowser> IApp::CreateBrowser(std::string url,
-                                        const PageOptions* settings_ptr,
-                                        PageObserver observer,
-                                        void* ctx)
+void IApp::OnScheduleMessagePumpWork(int64_t delay_ms)
 {
-    assert(settings_ptr != nullptr);
+    _observer.on_schedule_message_pump_work(delay_ms, _ctx);
+}
 
-    PageOptions settings;
-    memcpy(&settings, settings_ptr, sizeof(PageOptions));
-
+CefRefPtr<IPage> IApp::CreatePage(std::string url,
+                                  const PageOptions* settings,
+                                  PageObserver observer,
+                                  void* ctx)
+{
+    assert(settings != nullptr);
+    
     CefBrowserSettings broswer_settings;
-    broswer_settings.windowless_frame_rate = settings.frame_rate;
     broswer_settings.webgl = cef_state_t::STATE_DISABLED;
-    broswer_settings.background_color = 0x00ffffff;
     broswer_settings.databases = cef_state_t::STATE_DISABLED;
-
+    broswer_settings.background_color = 0xFF;
+    
+    broswer_settings.default_font_size = settings->default_font_size;
+    broswer_settings.windowless_frame_rate = settings->windowless_frame_rate;
+    broswer_settings.default_fixed_font_size = settings->default_fixed_font_size;
+    broswer_settings.local_storage = settings->local_storage ? STATE_ENABLED : STATE_DISABLED;
+    broswer_settings.javascript = settings->javascript ? STATE_ENABLED : STATE_DISABLED;
+    broswer_settings.javascript_access_clipboard = settings->javascript_access_clipboard ? STATE_ENABLED : STATE_DISABLED;
+    
     CefWindowInfo window_info;
-
-    if (settings.window_handle)
+    if (settings->window_handle != nullptr)
     {
-        if (settings.is_offscreen)
+        if (cef_settings.windowless_rendering_enabled)
         {
-            window_info.SetAsWindowless((CefWindowHandle)(settings.window_handle));
+            window_info.SetAsWindowless((CefWindowHandle)(settings->window_handle));
         }
         else
         {
-            window_info.SetAsChild((CefWindowHandle)(settings.window_handle),
-                                   CefRect(0, 0, settings.width, settings.height));
+            window_info.SetAsChild((CefWindowHandle)(settings->window_handle),
+                                   CefRect(0, 0, settings->width, settings->height));
         }
     }
-
-    CefRefPtr<IBrowser> browser = new IBrowser(settings, observer, ctx);
-    CefBrowserHost::CreateBrowser(window_info, browser, url, broswer_settings, nullptr, nullptr);
-    return browser;
+    
+    CefRefPtr<IPage> page = new IPage(cef_settings, settings, observer, ctx);
+    CefBrowserHost::CreateBrowser(window_info, page, url, broswer_settings, nullptr, nullptr);
+    return page;
 }
 
 void IApp::OnRegisterCustomSchemes(CefRawPtr<CefSchemeRegistrar> registrar)
 {
-    registrar->AddCustomScheme(WEBVIEW_SCHEME_NAME, SCHEME_OPT);
+    registrar->AddCustomScheme(WEBVIEW_SCHEME_NAME,
+                               CEF_SCHEME_OPTION_STANDARD | CEF_SCHEME_OPTION_SECURE |
+                               CEF_SCHEME_OPTION_CORS_ENABLED | CEF_SCHEME_OPTION_FETCH_ENABLED);
 }
 
 CefRefPtr<CefRenderProcessHandler> IRenderApp::GetRenderProcessHandler()
@@ -116,7 +131,9 @@ CefRefPtr<CefRenderProcessHandler> IRenderApp::GetRenderProcessHandler()
 
 void IRenderApp::OnRegisterCustomSchemes(CefRawPtr<CefSchemeRegistrar> registrar)
 {
-    registrar->AddCustomScheme(WEBVIEW_SCHEME_NAME, SCHEME_OPT);
+    registrar->AddCustomScheme(WEBVIEW_SCHEME_NAME,
+                               CEF_SCHEME_OPTION_STANDARD | CEF_SCHEME_OPTION_SECURE |
+                               CEF_SCHEME_OPTION_CORS_ENABLED | CEF_SCHEME_OPTION_FETCH_ENABLED);
 }
 
 void IRenderApp::OnContextCreated(CefRefPtr<CefBrowser> browser,
@@ -124,11 +141,11 @@ void IRenderApp::OnContextCreated(CefRefPtr<CefBrowser> browser,
                                   CefRefPtr<CefV8Context> context)
 {
     _send_func->SetBrowser(browser);
-
+    
     CefRefPtr<CefV8Value> native = CefV8Value::CreateObject(nullptr, nullptr);
     native->SetValue("send", CefV8Value::CreateFunction("send", _send_func), V8_PROPERTY_ATTRIBUTE_NONE);
     native->SetValue("on", CefV8Value::CreateFunction("on", _on_func), V8_PROPERTY_ATTRIBUTE_NONE);
-
+    
     CefRefPtr<CefV8Value> global = context->GetGlobal();
     global->SetValue("MessageTransport", std::move(native), V8_PROPERTY_ATTRIBUTE_NONE);
 }
@@ -154,25 +171,25 @@ bool MessageSendFunction::Execute(const CefString& name,
     {
         return false;
     }
-
+    
     if (arguments.size() != 1)
     {
         return false;
     }
-
+    
     if (!arguments[0]->IsString())
     {
         return false;
     }
-
+    
     CefRefPtr<CefV8Context> context = CefV8Context::GetCurrentContext();
     std::string message = arguments[0]->GetStringValue();
-
+    
     auto msg = CefProcessMessage::Create("MESSAGE_TRANSPORT");
     CefRefPtr<CefListValue> args = msg->GetArgumentList();
     args->SetSize(1);
     args->SetString(0, message);
-
+    
     _browser.value()->GetMainFrame()->SendProcessMessage(PID_BROWSER, msg);
     retval = CefV8Value::CreateUndefined();
     return true;
@@ -188,12 +205,12 @@ bool MessageOnFunction::Execute(const CefString& name,
     {
         return false;
     }
-
+    
     if (!arguments[0]->IsFunction())
     {
         return false;
     }
-
+    
     _context = std::optional(CefV8Context::GetCurrentContext());
     _callback = std::optional(arguments[0]);
     retval = CefV8Value::CreateUndefined();
@@ -206,12 +223,12 @@ void MessageOnFunction::Call(std::string message)
     {
         return;
     }
-
+    
     if (!_callback.has_value())
     {
         return;
     }
-
+    
     _context.value()->Enter();
     CefV8ValueList arguments;
     arguments.push_back(CefV8Value::CreateString(message));
