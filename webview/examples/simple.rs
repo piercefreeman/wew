@@ -81,7 +81,6 @@ fn run_cef() -> anyhow::Result<()> {
         Ok::<(), anyhow::Error>(())
     });
 
-    App::run();
     Ok(())
 }
 

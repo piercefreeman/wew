@@ -99,28 +99,6 @@ pub trait AppObserver {
     fn on_schedule_message_pump_work(&self, delay: u64) {}
 }
 
-/// CefApp
-///
-/// The CefApp interface provides access to process-specific callbacks.
-/// Important callbacks include:
-///
-/// OnBeforeCommandLineProcessing which provides the opportunity to
-/// programmatically set command-line arguments. See the “Command Line
-/// Arguments” section for more information.
-///
-/// OnRegisterCustomSchemes which provides an opportunity to register custom
-/// schemes. See the “”Request Handling” section for more information.
-///
-/// GetBrowserProcessHandler which returns the handler for functionality
-/// specific to the browser process including the OnContextInitialized() method.
-///
-/// GetRenderProcessHandler which returns the handler for functionality specific
-/// to the render process. This includes JavaScript-related callbacks and
-/// process messages. See the JavaScriptIntegration Wiki page and the
-/// “Inter-Process Communication” section for more information.
-///
-/// An example CefApp implementation can be seen in cefsimple/simple_app.h and
-/// cefsimple/simple_app.cc.
 pub struct App(Arc<wrapper::App>);
 
 impl App {
@@ -147,16 +125,6 @@ impl App {
         Some(Self(inner))
     }
 
-    /// Create a new browser using the window parameters specified by
-    /// |windowInfo|.
-    ///
-    /// All values will be copied internally and the actual window (if any) will
-    /// be created on the UI thread. If |request_context| is empty the global
-    /// request context will be used. This method can be called on any browser
-    /// process thread and will not block. The optional |extra_info| parameter
-    /// provides an opportunity to specify extra information specific to the
-    /// created browser that will be passed to
-    /// CefRenderProcessHandler::OnBrowserCreated() in the render process.
     pub fn create_page<T>(&self, url: &str, options: &PageOptions, observer: T) -> Option<Page>
     where
         T: PageObserver + 'static,
@@ -166,12 +134,12 @@ impl App {
             .map(|it| Page(it))
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
     pub fn run() {
         wrapper::MessageLoop::run();
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
     pub fn poll() {
         wrapper::MessageLoop::poll();
     }
@@ -184,8 +152,9 @@ impl Drop for App {
 }
 
 pub(crate) mod wrapper {
-    use std::ffi::c_void;
+    use std::{ffi::c_void, ptr::null};
 
+    #[allow(unused_imports)]
     use webview_sys::{
         close_app, create_app, execute_app, poll_message_loop, quit_message_loop, run_message_loop,
     };
@@ -197,6 +166,7 @@ pub(crate) mod wrapper {
     pub struct MessageLoop;
 
     impl MessageLoop {
+        #[cfg(target_os = "macos")]
         pub fn run() {
             unsafe { run_message_loop() }
         }
@@ -205,33 +175,12 @@ pub(crate) mod wrapper {
             unsafe { quit_message_loop() }
         }
 
+        #[cfg(target_os = "macos")]
         pub fn poll() {
             unsafe { poll_message_loop() }
         }
     }
 
-    /// CefApp
-    ///
-    /// The CefApp interface provides access to process-specific callbacks.
-    /// Important callbacks include:
-    ///
-    /// OnBeforeCommandLineProcessing which provides the opportunity to
-    /// programmatically set command-line arguments. See the “Command Line
-    /// Arguments” section for more information.
-    ///
-    /// OnRegisterCustomSchemes which provides an opportunity to register custom
-    /// schemes. See the “”Request Handling” section for more information.
-    ///
-    /// GetBrowserProcessHandler which returns the handler for functionality
-    /// specific to the browser process including the OnContextInitialized() method.
-    ///
-    /// GetRenderProcessHandler which returns the handler for functionality specific
-    /// to the render process. This includes JavaScript-related callbacks and
-    /// process messages. See the JavaScriptIntegration Wiki page and the
-    /// “Inter-Process Communication” section for more information.
-    ///
-    /// An example CefApp implementation can be seen in cefsimple/simple_app.h and
-    /// cefsimple/simple_app.cc.
     pub(crate) struct App {
         observer: *mut Box<dyn AppObserver>,
         pub ptr: *mut c_void,
@@ -257,9 +206,9 @@ pub(crate) mod wrapper {
                 #[cfg(target_os = "macos")]
                 framework_dir_path: ffi::into_opt(options.framework_dir_path),
                 #[cfg(not(target_os = "macos"))]
-                main_bundle_path: None,
+                main_bundle_path: null(),
                 #[cfg(not(target_os = "macos"))]
-                framework_dir_path: None,
+                framework_dir_path: null(),
             };
 
             let observer: *mut Box<dyn AppObserver> = Box::into_raw(Box::new(Box::new(observer)));
@@ -287,16 +236,6 @@ pub(crate) mod wrapper {
             Some(Self { observer, ptr })
         }
 
-        /// Create a new browser using the window parameters specified by
-        /// |windowInfo|.
-        ///
-        /// All values will be copied internally and the actual window (if any) will
-        /// be created on the UI thread. If |request_context| is empty the global
-        /// request context will be used. This method can be called on any browser
-        /// process thread and will not block. The optional |extra_info| parameter
-        /// provides an opportunity to specify extra information specific to the
-        /// created browser that will be passed to
-        /// CefRenderProcessHandler::OnBrowserCreated() in the render process.
         pub(crate) fn create_page<T>(
             &self,
             url: &str,
