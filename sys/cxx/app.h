@@ -25,6 +25,8 @@ public:
     
     void OnRegisterCustomSchemes(CefRawPtr<CefSchemeRegistrar> registrar) override;
     CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override;
+    void OnBeforeCommandLineProcessing(const CefString& process_type,
+                                       CefRefPtr<CefCommandLine> command_line) override;
     
     /* CefBrowserProcessHandler */
     

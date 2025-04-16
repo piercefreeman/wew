@@ -79,6 +79,12 @@ void IApp::OnScheduleMessagePumpWork(int64_t delay_ms)
     _observer.on_schedule_message_pump_work(delay_ms, _ctx);
 }
 
+void IApp::OnBeforeCommandLineProcessing(const CefString& process_type,
+                                         CefRefPtr<CefCommandLine> command_line) 
+{
+    command_line->AppendSwitch("use-mock-keychain");
+}
+
 CefRefPtr<IPage> IApp::CreatePage(std::string url,
                                   const PageOptions* settings,
                                   PageObserver observer,
