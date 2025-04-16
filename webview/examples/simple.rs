@@ -86,7 +86,7 @@ fn run_cef() -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     if is_subprocess() {
-        execute_subprocess();
+        execute_subprocess().unwrap();
     }
 
     run_cef()?;

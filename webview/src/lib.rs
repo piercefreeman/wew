@@ -71,10 +71,17 @@ impl Args {
 }
 
 /// webview sub process does not work in tokio runtime!
-pub fn execute_subprocess() -> ! {
+pub fn execute_subprocess() -> Result<(), std::io::Error> {
     let args = Args::default();
-    unsafe { webview_sys::execute_subprocess(args.len(), args.as_ptr()) };
-    unreachable!("sub process closed, this is a bug!")
+    let code = unsafe { webview_sys::execute_subprocess(args.len(), args.as_ptr()) };
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("code = {}", code),
+        ))
+    }
 }
 
 pub fn is_subprocess() -> bool {
@@ -152,7 +159,7 @@ impl Drop for App {
 }
 
 pub(crate) mod wrapper {
-    use std::{ffi::c_void, ptr::null};
+    use std::ffi::c_void;
 
     #[allow(unused_imports)]
     use webview_sys::{
@@ -206,9 +213,9 @@ pub(crate) mod wrapper {
                 #[cfg(target_os = "macos")]
                 framework_dir_path: ffi::into_opt(options.framework_dir_path),
                 #[cfg(not(target_os = "macos"))]
-                main_bundle_path: null(),
+                main_bundle_path: std::ptr::null(),
                 #[cfg(not(target_os = "macos"))]
-                framework_dir_path: null(),
+                framework_dir_path: std::ptr::null(),
             };
 
             let observer: *mut Box<dyn AppObserver> = Box::into_raw(Box::new(Box::new(observer)));

@@ -43,17 +43,17 @@ void poll_message_loop()
     CefDoMessageLoopWork();
 }
 
-void execute_subprocess(int argc, const char** argv)
+int execute_subprocess(int argc, const char** argv)
 {
 #ifdef MACOS
     CefScopedLibraryLoader library_loader;
     if (!library_loader.LoadInHelper())
     {
-        return;
+        return -1;
     }
 #endif
     auto main_args = get_main_args(argc, argv);
-    CefExecuteProcess(main_args, new IRenderApp, nullptr);
+    return CefExecuteProcess(main_args, new IRenderApp, nullptr);
 }
 
 void* create_app(const AppOptions* settings, AppObserver observer, void* ctx)

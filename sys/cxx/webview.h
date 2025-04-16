@@ -164,7 +164,7 @@ EXPORT void quit_message_loop();
 
 EXPORT void poll_message_loop();
 
-EXPORT void execute_subprocess(int argc, const char** argv);
+EXPORT int execute_subprocess(int argc, const char** argv);
 
 EXPORT void* create_app(const AppOptions* settings, AppObserver observer, void* ctx);
 
