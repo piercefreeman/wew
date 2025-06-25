@@ -12,7 +12,7 @@
 <div align="center">
   <sup>
     current version: 
-    <a href="https://cef-builds.spotifycdn.com/index.html">cef_binary_137.0.17+gf354b0e+chromium-137.0.7151.104</a>
+    <a href="https://cef-builds.spotifycdn.com/index.html">137.0.17+gf354b0e+chromium-137.0.7151.104</a>
   </sup>
   </br>
   <sup>platform supported: Windows / macOS</sup>
