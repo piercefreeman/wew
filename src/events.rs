@@ -1,17 +1,9 @@
 use bitflags::bitflags;
 
-#[cfg(target_os = "windows")]
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, MAPVK_VSC_TO_VK_EX, MapVirtualKeyA, VK_CAPITAL,
-};
-
-#[cfg(feature = "winit")]
-use crate::{WindowlessRenderWebView, webview::WebView};
-
 /// Represents a position
 ///
 /// This is mainly used for mouse and touch events
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
@@ -27,24 +19,12 @@ pub enum MouseButton {
     Right,
 }
 
-/// Represents a rectangular area
-#[derive(Debug, Clone, Copy)]
-pub struct Rect {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
-
 /// Represents a mouse event
 ///
 /// This is mainly used for mouse events
 #[derive(Debug, Clone)]
 pub enum MouseEvent {
     /// Click a mouse button
-    ///
-    /// Position is optional, if position is None, it means the mouse is at the
-    /// last position
     Click(MouseButton, bool, Option<Position>),
     /// Move the mouse
     Move(Position),
@@ -128,432 +108,402 @@ pub struct KeyboardEvent {
 #[derive(Default)]
 pub struct EventAdapter {
     modifiers: KeyboardModifiers,
-    ime: bool,
-}
-
-impl EventAdapter {
-    /// Get the state of the capslock key
-    ///
-    /// This method directly calls the operating system API to get the current
-    /// system capslock state.
-    pub fn get_capslock_state() -> bool {
-        #[allow(unused_mut)]
-        let mut state = false;
-
-        #[cfg(target_os = "windows")]
-        {
-            state = (unsafe { GetKeyState(VK_CAPITAL.0 as i32) } & 0x0001) != 0;
-        }
-
-        state
-    }
+    allow_ime: bool,
 }
 
 #[cfg(feature = "winit")]
-impl EventAdapter {
-    const SCANCODE_LSHIFT: u32 = 42;
-    const SCANCODE_RSHIFT: u32 = 54;
-    const SCANCODE_LCTRL: u32 = 29;
-    const SCANCODE_ENTER: u32 = 28;
-    const SCANCODE_SPACE: u32 = 57;
+mod winit_impl {
+    use winit::{
+        event::{Ime, MouseButton as WinitMouseButton, MouseScrollDelta, WindowEvent},
+        keyboard::{Key, KeyCode, ModifiersState, PhysicalKey},
+        platform::{
+            modifier_supplement::KeyEventExtModifierSupplement, scancode::PhysicalKeyExtScancode,
+        },
+    };
 
-    /// Handling window events for `winit`
-    ///
-    /// ## Example
-    ///
-    /// ```ignore
-    /// struct App {
-    ///     webview: WebView<MessagePumpLoop, WindowlessRenderWebView>,
-    ///     event_adapter: EventAdapter,
-    /// }
-    ///
-    /// impl ApplicationHandler for App {
-    ///     fn window_event(
-    ///         &mut self,
-    ///         event_loop: &ActiveEventLoop,
-    ///         _window_id: WindowId,
-    ///         event: WindowEvent,
-    ///     ) {
-    ///         self.event_adapter
-    ///             .on_winit_window_event(&mut self.webview, &event);
-    ///     }
-    /// }
-    /// ```
-    pub fn on_winit_window_event<R>(
-        &mut self,
-        webview: &WebView<R, WindowlessRenderWebView>,
-        event: &winit::event::WindowEvent,
-    ) {
-        use winit::{
-            event::{Ime, MouseButton as WtMouseButton, MouseScrollDelta, WindowEvent},
-            keyboard::{Key, KeyCode, ModifiersState, NativeKeyCode, PhysicalKey},
-            platform::scancode::PhysicalKeyExtScancode,
-        };
+    use crate::{
+        WindowlessRenderWebView,
+        events::{
+            EventAdapter, IMEAction, KeyboardEvent, KeyboardEventType, KeyboardModifiers,
+            MouseButton, MouseEvent, Position,
+        },
+        webview::WebView,
+    };
 
-        match event {
-            WindowEvent::Ime(ime) => match ime {
-                Ime::Commit(composition) => {
-                    if self.ime {
+    #[cfg(target_os = "windows")]
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetKeyState, MAPVK_VSC_TO_VK_EX, MapVirtualKeyA, VK_CAPITAL,
+    };
+
+    impl EventAdapter {
+        /// Get the state of the capslock key
+        ///
+        /// This method directly calls the operating system API to get the
+        /// current system capslock state.
+        #[inline]
+        #[cfg(target_os = "windows")]
+        fn get_capslock_state() -> bool {
+            return (unsafe { GetKeyState(VK_CAPITAL.0 as i32) } & 0x0001) != 0;
+        }
+
+        /// Handling window events for `winit`
+        ///
+        /// ## Example
+        ///
+        /// ```ignore
+        /// struct App {
+        ///     webview: WebView<MessagePumpLoop, WindowlessRenderWebView>,
+        ///     event_adapter: EventAdapter,
+        /// }
+        ///
+        /// impl ApplicationHandler for App {
+        ///     fn window_event(
+        ///         &mut self,
+        ///         event_loop: &ActiveEventLoop,
+        ///         _window_id: WindowId,
+        ///         event: WindowEvent,
+        ///     ) {
+        ///         self.event_adapter
+        ///             .on_winit_window_event(&mut self.webview, &event);
+        ///     }
+        /// }
+        /// ```
+        pub fn on_winit_window_event(
+            &mut self,
+            webview: &WebView<WindowlessRenderWebView>,
+            event: &WindowEvent,
+        ) {
+            match event {
+                WindowEvent::Ime(ime) => match ime {
+                    Ime::Commit(composition) => {
                         webview.ime(&IMEAction::Composition(composition));
                     }
-                }
-                Ime::Preedit(preedit, Some((cursor_pos, selection_start))) => {
-                    if self.ime {
+                    Ime::Preedit(preedit, Some((cursor_pos, selection_start))) => {
                         webview.ime(&IMEAction::Pre(
                             preedit,
                             *cursor_pos as i32,
                             *selection_start as i32,
                         ));
                     }
-                }
-                Ime::Enabled => {
-                    self.ime = true;
-                }
-                Ime::Disabled => {
-                    self.ime = false;
-                }
-                _ => (),
-            },
-            WindowEvent::ModifiersChanged(modifiers) => {
-                if self.ime {
-                    return;
-                }
+                    Ime::Enabled => {
+                        self.allow_ime = true;
 
-                self.modifiers = KeyboardModifiers::None;
-
-                let state = modifiers.state();
-                for it in ModifiersState::all() {
-                    if state.contains(it) {
-                        self.modifiers |= match it {
-                            ModifiersState::SHIFT => KeyboardModifiers::Shift,
-                            ModifiersState::CONTROL => KeyboardModifiers::Ctrl,
-                            ModifiersState::ALT => KeyboardModifiers::Alt,
-                            ModifiersState::SUPER => {
-                                if cfg!(target_os = "macos") {
-                                    KeyboardModifiers::Command
-                                } else {
-                                    KeyboardModifiers::Win
-                                }
-                            }
-                            _ => KeyboardModifiers::None,
-                        };
-                    }
-                }
-
-                if Self::get_capslock_state() {
-                    self.modifiers |= KeyboardModifiers::CapsLock;
-                }
-            }
-            WindowEvent::KeyboardInput { event: input, .. } => {
-                {
-                    if !input.state.is_pressed() {
-                        if let PhysicalKey::Code(KeyCode::CapsLock) = input.physical_key {
-                            self.modifiers |= KeyboardModifiers::CapsLock;
-                        }
-                    }
-                }
-
-                if self.ime {
-                    return;
-                }
-
-                let mut event = KeyboardEvent::default();
-                event.modifiers = self.modifiers;
-                event.ty = if input.state.is_pressed() {
-                    KeyboardEventType::KeyDown
-                } else {
-                    KeyboardEventType::KeyUp
-                };
-
-                event.native_key_code = match input.physical_key {
-                    PhysicalKey::Code(code) => {
-                        if let Some(scancode) = code.to_scancode() {
-                            scancode as u32
-                        } else {
-                            0
-                        }
-                    }
-                    PhysicalKey::Unidentified(code) => match code {
-                        NativeKeyCode::Windows(code) | NativeKeyCode::MacOS(code) => code as u32,
-                        NativeKeyCode::Xkb(code) => code,
-                        _ => unimplemented!("not supports android platfrom!"),
-                    },
-                };
-
-                if let Some(text) = input.text.as_ref().or_else(|| {
-                    if let Key::Character(text) = &input.logical_key {
-                        Some(text)
-                    } else {
-                        None
-                    }
-                }) {
-                    if let Some(character) = text.chars().next() {
-                        event.unmodified_character = character as u16;
-                        event.character = character as u16;
-                    }
-                }
-
-                #[cfg(target_os = "windows")]
-                {
-                    event.windows_key_code =
-                        unsafe { MapVirtualKeyA(event.native_key_code, MAPVK_VSC_TO_VK_EX) };
-                }
-
-                webview.keyboard(&event);
-
-                // When the key is pressed, an additional `char` event must be sent.
-                if input.state.is_pressed() {
-                    event.ty = KeyboardEventType::Char;
-
-                    if cfg!(not(target_os = "windows")) {
-                        webview.keyboard(&event);
-                    } else {
-                        if event.native_key_code != Self::SCANCODE_LSHIFT
-                            && event.native_key_code != Self::SCANCODE_RSHIFT
-                            && event.native_key_code != Self::SCANCODE_LCTRL
+                        // Because key events are triggered before IME events, an extra character is
+                        // output. If IME events are enabled, the previously entered character
+                        // should be deleted.
                         {
-                            let is_ascii =
-                                event.native_key_code >= 0x10 && event.native_key_code <= 0x37;
+                            let mut event = KeyboardEvent {
+                                ty: KeyboardEventType::KeyDown,
+                                modifiers: KeyboardModifiers::None,
+                                windows_key_code: 8,
+                                native_key_code: 14,
+                                is_system_key: 0,
+                                character: 8,
+                                unmodified_character: 8,
+                                focus_on_editable_field: false,
+                            };
 
-                            if !self.modifiers.contains(KeyboardModifiers::CapsLock)
-                                && is_ascii
-                                && event.native_key_code != Self::SCANCODE_ENTER
-                            {
+                            webview.keyboard(&event);
+
+                            event.ty = KeyboardEventType::KeyUp;
+
+                            webview.keyboard(&event);
+                        }
+                    }
+                    Ime::Disabled => {
+                        self.allow_ime = false;
+                    }
+                    _ => (),
+                },
+                WindowEvent::ModifiersChanged(modifiers) => {
+                    self.modifiers = KeyboardModifiers::None;
+
+                    let state = modifiers.state();
+                    for it in ModifiersState::all() {
+                        if state.contains(it) {
+                            self.modifiers |= KeyboardModifiers::from(it);
+                        }
+                    }
+
+                    #[cfg(target_os = "windows")]
+                    if Self::get_capslock_state() {
+                        self.modifiers |= KeyboardModifiers::CapsLock;
+                    }
+                }
+                WindowEvent::KeyboardInput { event: input, .. } => {
+                    let mut event = KeyboardEvent::default();
+                    event.ty = if input.state.is_pressed() {
+                        KeyboardEventType::KeyDown
+                    } else {
+                        KeyboardEventType::KeyUp
+                    };
+
+                    // If it is not a definite key position, just ignore it.
+                    let key_code = if let PhysicalKey::Code(code) = input.physical_key {
+                        event.native_key_code = code.to_scancode().unwrap_or(0);
+
+                        code
+                    } else {
+                        return;
+                    };
+
+                    // Get the character of the current key position, there may be cases where it
+                    // does not exist, but it is normal for the character not to exist, such as
+                    // control keys.
+                    if let Some(text) = input.text.as_ref().map(|it| it.as_str()).or_else(|| {
+                        if let Key::Character(text) = &input.logical_key {
+                            Some(text.as_str())
+                        } else {
+                            input.text_with_all_modifiers()
+                        }
+                    }) {
+                        if let Some(character) = text.chars().next() {
+                            event.unmodified_character = character as u16;
+                            event.character = character as u16;
+                        }
+                    }
+
+                    if cfg!(target_os = "windows") {
+                        // On Windows, keyboard key events and IME events exist at the same time, so
+                        // they need to be filtered here. If currently processing IME events, do not
+                        // process keyboard events.
+                        if self.allow_ime {
+                            return;
+                        }
+
+                        // Windows-specific handling, because there will be capslock keyboard events
+                        // on Windows, so if capslock is pressed here, it needs to be added to
+                        // modifiers.
+                        if !input.state.is_pressed() {
+                            if let PhysicalKey::Code(KeyCode::CapsLock) = input.physical_key {
+                                self.modifiers |= KeyboardModifiers::CapsLock;
+                            }
+                        }
+
+                        // Windows-specific window virtual key code.
+                        #[cfg(target_os = "windows")]
+                        {
+                            event.windows_key_code = unsafe {
+                                MapVirtualKeyA(event.native_key_code, MAPVK_VSC_TO_VK_EX)
+                            };
+                        }
+
+                        event.modifiers = self.modifiers;
+
+                        webview.keyboard(&event);
+
+                        // On Windows, only non-control keys can send char events.
+                        if input.state.is_pressed() && is_char(&key_code) {
+                            if let Some((base, upcase)) = get_symbol_mapping(&key_code) {
+                                // At this point, it means a symbol key is pressed. By default, the
+                                // windows key code for symbols is incorrect and needs to be mapped
+                                // manually. Here, it considers whether the shift key is pressed at
+                                // the same time.
+                                event.windows_key_code =
+                                    if self.modifiers.contains(KeyboardModifiers::Shift) {
+                                        *upcase as u32
+                                    } else {
+                                        *base as u32
+                                    };
+                            } else {
+                                // By default it is uppercase, needs to be shifted by 32 bits to
+                                // change to lowercase.
                                 event.windows_key_code += 32;
                             }
 
-                            let mut is_number_symbol = false;
-                            if let Some(mapping) = event.native_key_code.symbol_mapping() {
-                                is_number_symbol = true;
+                            event.ty = KeyboardEventType::Char;
 
-                                event.windows_key_code =
-                                    if self.modifiers.contains(KeyboardModifiers::Shift) {
-                                        mapping.upcase as u32
-                                    } else {
-                                        mapping.base as u32
-                                    };
-                            }
+                            webview.keyboard(&event);
+                        }
+                    } else {
+                        event.modifiers = self.modifiers;
 
-                            if is_number_symbol
-                                || is_ascii
-                                || event.native_key_code == Self::SCANCODE_SPACE
-                            {
-                                webview.keyboard(&event);
+                        // On macOS, modifiers need special handling. If a modifier key is pressed,
+                        // add it to the current event's modifiers. If released, remove it from the
+                        // event's modifiers. I know this is strange, but on macOS, modifiers are
+                        // directly determined by the modifiers property for press and release,
+                        // regardless of the specific key code.
+                        if let Some(modifiers) = match key_code {
+                            KeyCode::CapsLock => Some(KeyboardModifiers::CapsLock),
+                            KeyCode::AltLeft | KeyCode::AltRight => Some(KeyboardModifiers::Alt),
+                            KeyCode::ControlLeft | KeyCode::ControlRight => {
+                                Some(KeyboardModifiers::Ctrl)
                             }
+                            KeyCode::ShiftLeft | KeyCode::ShiftRight => {
+                                Some(KeyboardModifiers::Shift)
+                            }
+                            KeyCode::SuperLeft | KeyCode::SuperRight => {
+                                Some(KeyboardModifiers::Command)
+                            }
+                            _ => None,
+                        } {
+                            if input.state.is_pressed() {
+                                event.modifiers |= modifiers;
+                            } else {
+                                event.modifiers.remove(modifiers);
+                            }
+                        }
+
+                        webview.keyboard(&event);
+
+                        if input.state.is_pressed() {
+                            event.ty = KeyboardEventType::Char;
+
+                            webview.keyboard(&event);
                         }
                     }
                 }
-            }
-            WindowEvent::MouseInput { state, button, .. } => {
-                webview.mouse(&MouseEvent::Click(
-                    match button {
-                        WtMouseButton::Left => MouseButton::Left,
-                        WtMouseButton::Right => MouseButton::Right,
-                        _ => MouseButton::Middle,
-                    },
-                    state.is_pressed(),
-                    None,
-                ));
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                let (x, y) = match delta {
-                    MouseScrollDelta::PixelDelta(pos) => (pos.x as i32, pos.y as i32),
-                    MouseScrollDelta::LineDelta(x, y) => ((x * 20.0) as i32, (y * 20.0) as i32),
-                };
-
-                webview.mouse(&MouseEvent::Wheel(Position { x, y }));
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                webview.mouse(&MouseEvent::Move(Position {
-                    x: position.x as i32,
-                    y: position.y as i32,
-                }));
-            }
-            WindowEvent::Focused(state) => {
-                webview.focus(*state);
-
-                // Since events cannot be captured when not in focus, the case
-                // state must be reacquired when refocusing.
-                if *state && Self::get_capslock_state() {
-                    self.modifiers |= KeyboardModifiers::CapsLock;
+                WindowEvent::MouseInput { state, button, .. } => {
+                    webview.mouse(&MouseEvent::Click(
+                        MouseButton::from(*button),
+                        state.is_pressed(),
+                        None,
+                    ));
                 }
+                WindowEvent::MouseWheel { delta, .. } => {
+                    let (x, y) = match delta {
+                        MouseScrollDelta::PixelDelta(pos) => (pos.x as i32, pos.y as i32),
+                        MouseScrollDelta::LineDelta(x, y) => ((x * 20.0) as i32, (y * 20.0) as i32),
+                    };
+
+                    webview.mouse(&MouseEvent::Wheel(Position { x, y }));
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    webview.mouse(&MouseEvent::Move(Position {
+                        x: position.x as i32,
+                        y: position.y as i32,
+                    }));
+                }
+                WindowEvent::Focused(state) => {
+                    webview.focus(*state);
+
+                    // Since events cannot be captured when not in focus, the case
+                    // state must be reacquired when refocusing.
+                    #[cfg(target_os = "windows")]
+                    if *state && Self::get_capslock_state() {
+                        self.modifiers |= KeyboardModifiers::CapsLock;
+                    }
+                }
+                WindowEvent::Resized(size) => {
+                    webview.resize(size.width, size.height);
+                }
+                _ => {}
             }
-            WindowEvent::Resized(size) => {
-                webview.resize(size.width, size.height);
-            }
-            _ => {}
         }
     }
-}
 
-#[cfg(feature = "winit")]
-struct SymbolMapping {
-    base: char,
-    upcase: char,
-}
+    impl From<ModifiersState> for KeyboardModifiers {
+        fn from(value: ModifiersState) -> Self {
+            match value {
+                ModifiersState::SHIFT => Self::Shift,
+                ModifiersState::CONTROL => Self::Ctrl,
+                ModifiersState::ALT => Self::Alt,
+                ModifiersState::SUPER => {
+                    if cfg!(target_os = "macos") {
+                        Self::Command
+                    } else {
+                        Self::Win
+                    }
+                }
+                _ => Self::None,
+            }
+        }
+    }
 
-#[cfg(feature = "winit")]
-trait Win32ScanCodeCapsLockExt {
-    fn symbol_mapping(&self) -> Option<&SymbolMapping>;
-}
+    impl From<WinitMouseButton> for MouseButton {
+        fn from(value: WinitMouseButton) -> Self {
+            match value {
+                WinitMouseButton::Left => Self::Left,
+                WinitMouseButton::Right => Self::Right,
+                WinitMouseButton::Middle => Self::Middle,
+                _ => Self::Middle,
+            }
+        }
+    }
 
-#[cfg(feature = "winit")]
-static SCANCODE_SYMBOL_MAPPING: &[(u32, SymbolMapping)] = &[
-    (
-        2,
-        SymbolMapping {
-            base: '1',
-            upcase: '!',
-        },
-    ),
-    (
-        3,
-        SymbolMapping {
-            base: '2',
-            upcase: '@',
-        },
-    ),
-    (
-        4,
-        SymbolMapping {
-            base: '3',
-            upcase: '#',
-        },
-    ),
-    (
-        5,
-        SymbolMapping {
-            base: '4',
-            upcase: '$',
-        },
-    ),
-    (
-        6,
-        SymbolMapping {
-            base: '5',
-            upcase: '%',
-        },
-    ),
-    (
-        7,
-        SymbolMapping {
-            base: '6',
-            upcase: '^',
-        },
-    ),
-    (
-        8,
-        SymbolMapping {
-            base: '7',
-            upcase: '&',
-        },
-    ),
-    (
-        9,
-        SymbolMapping {
-            base: '8',
-            upcase: '*',
-        },
-    ),
-    (
-        10,
-        SymbolMapping {
-            base: '9',
-            upcase: '(',
-        },
-    ),
-    (
-        11,
-        SymbolMapping {
-            base: '0',
-            upcase: ')',
-        },
-    ),
-    (
-        12,
-        SymbolMapping {
-            base: '-',
-            upcase: '_',
-        },
-    ),
-    (
-        13,
-        SymbolMapping {
-            base: '=',
-            upcase: '+',
-        },
-    ),
-    (
-        26,
-        SymbolMapping {
-            base: '[',
-            upcase: '(',
-        },
-    ),
-    (
-        27,
-        SymbolMapping {
-            base: ']',
-            upcase: ')',
-        },
-    ),
-    (
-        39,
-        SymbolMapping {
-            base: ';',
-            upcase: ':',
-        },
-    ),
-    (
-        40,
-        SymbolMapping {
-            base: '\'',
-            upcase: '"',
-        },
-    ),
-    (
-        41,
-        SymbolMapping {
-            base: '`',
-            upcase: '~',
-        },
-    ),
-    (
-        43,
-        SymbolMapping {
-            base: '\\',
-            upcase: '|',
-        },
-    ),
-    (
-        51,
-        SymbolMapping {
-            base: ',',
-            upcase: '<',
-        },
-    ),
-    (
-        52,
-        SymbolMapping {
-            base: '.',
-            upcase: '>',
-        },
-    ),
-    (
-        53,
-        SymbolMapping {
-            base: '/',
-            upcase: '?',
-        },
-    ),
-];
+    #[inline]
+    fn get_symbol_mapping(code: &KeyCode) -> Option<&'static (char, char)> {
+        [
+            (KeyCode::Digit1, ('1', '!')),
+            (KeyCode::Digit2, ('2', '@')),
+            (KeyCode::Digit3, ('3', '#')),
+            (KeyCode::Digit4, ('4', '$')),
+            (KeyCode::Digit5, ('5', '%')),
+            (KeyCode::Digit6, ('6', '^')),
+            (KeyCode::Digit7, ('7', '&')),
+            (KeyCode::Digit8, ('8', '*')),
+            (KeyCode::Digit9, ('9', '(')),
+            (KeyCode::Digit0, ('0', ')')),
+            (KeyCode::Minus, ('-', '_')),
+            (KeyCode::Equal, ('=', '+')),
+            (KeyCode::BracketLeft, ('[', '{')),
+            (KeyCode::BracketRight, (']', '}')),
+            (KeyCode::Semicolon, (';', ':')),
+            (KeyCode::Quote, ('\'', '"')),
+            (KeyCode::Backquote, ('`', '~')),
+            (KeyCode::Backslash, ('\\', '|')),
+            (KeyCode::Comma, (',', '<')),
+            (KeyCode::Period, ('.', '>')),
+            (KeyCode::Slash, ('/', '?')),
+        ]
+        .iter()
+        .find(|(v, _)| v == code)
+        .map(|(_, v)| v)
+    }
 
-#[cfg(feature = "winit")]
-impl Win32ScanCodeCapsLockExt for u32 {
-    fn symbol_mapping(&self) -> Option<&SymbolMapping> {
-        SCANCODE_SYMBOL_MAPPING
-            .iter()
-            .find(|(code, _)| code == self)
-            .map(|(_, mapping)| mapping)
+    #[inline]
+    fn is_char(code: &KeyCode) -> bool {
+        [
+            KeyCode::Backquote,
+            KeyCode::Backslash,
+            KeyCode::BracketLeft,
+            KeyCode::BracketRight,
+            KeyCode::IntlBackslash,
+            KeyCode::Semicolon,
+            KeyCode::Comma,
+            KeyCode::Equal,
+            KeyCode::Minus,
+            KeyCode::Period,
+            KeyCode::Quote,
+            KeyCode::Slash,
+            KeyCode::Space,
+            KeyCode::Digit0,
+            KeyCode::Digit1,
+            KeyCode::Digit2,
+            KeyCode::Digit3,
+            KeyCode::Digit4,
+            KeyCode::Digit5,
+            KeyCode::Digit6,
+            KeyCode::Digit7,
+            KeyCode::Digit8,
+            KeyCode::Digit9,
+            KeyCode::KeyA,
+            KeyCode::KeyB,
+            KeyCode::KeyC,
+            KeyCode::KeyD,
+            KeyCode::KeyE,
+            KeyCode::KeyF,
+            KeyCode::KeyG,
+            KeyCode::KeyH,
+            KeyCode::KeyI,
+            KeyCode::KeyJ,
+            KeyCode::KeyK,
+            KeyCode::KeyL,
+            KeyCode::KeyM,
+            KeyCode::KeyN,
+            KeyCode::KeyO,
+            KeyCode::KeyP,
+            KeyCode::KeyQ,
+            KeyCode::KeyR,
+            KeyCode::KeyS,
+            KeyCode::KeyT,
+            KeyCode::KeyU,
+            KeyCode::KeyV,
+            KeyCode::KeyW,
+            KeyCode::KeyX,
+            KeyCode::KeyY,
+            KeyCode::KeyZ,
+        ]
+        .contains(code)
     }
 }

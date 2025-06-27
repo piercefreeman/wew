@@ -1,6 +1,6 @@
 [package]
 name = "wew"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.4"
 edition = "2024"
 authors = ["mycrl <lepidodendraceae@gmail.com>"]
 description = "Cross-platform WebView rendering library for rust."
@@ -23,6 +23,8 @@ tokio = { version = "1", features = ["rt"], optional = true }
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.60.0", features = [
     "Win32",
+    "Win32_System",
+    "Win32_System_Threading",
     "Win32_UI",
     "Win32_UI_Input",
     "Win32_UI_Input_KeyboardAndMouse",
@@ -47,3 +49,6 @@ winit = ["dep:winit"]
 
 [workspace]
 members = ["examples/*"]
+
+[package.metadata.docs.rs]
+all-features = true
