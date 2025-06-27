@@ -601,12 +601,12 @@ impl<R> Runtime<R, NativeWindowWebView> {
 impl Into<sys::LogLevel> for LevelFilter {
     fn into(self) -> sys::LogLevel {
         match self {
-            Self::Off => sys::LogLevel::WEBVIEW_LOG_DISABLE,
-            Self::Info => sys::LogLevel::WEBVIEW_LOG_INFO,
-            Self::Error => sys::LogLevel::WEBVIEW_LOG_ERROR,
-            Self::Warn => sys::LogLevel::WEBVIEW_LOG_WARNING,
-            Self::Debug => sys::LogLevel::WEBVIEW_LOG_DEBUG,
-            Self::Trace => sys::LogLevel::WEBVIEW_LOG_VERBOSE,
+            Self::Off => sys::LogLevel::WEW_LOG_DISABLE,
+            Self::Info => sys::LogLevel::WEW_LOG_INFO,
+            Self::Error => sys::LogLevel::WEW_LOG_ERROR,
+            Self::Warn => sys::LogLevel::WEW_LOG_WARNING,
+            Self::Debug => sys::LogLevel::WEW_LOG_DEBUG,
+            Self::Trace => sys::LogLevel::WEW_LOG_VERBOSE,
         }
     }
 }

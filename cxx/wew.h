@@ -66,48 +66,106 @@ typedef struct
     const RequestHandlerFactory *factory;
 } CustomSchemeAttributes;
 
+///
+/// Cursor type values.
+///
+typedef enum
+{
+    WEW_CT_POINTER,
+    WEW_CT_CROSS,
+    WEW_CT_HAND,
+    WEW_CT_IBEAM,
+    WEW_CT_WAIT,
+    WEW_CT_HELP,
+    WEW_CT_EASTRESIZE,
+    WEW_CT_NORTHRESIZE,
+    WEW_CT_NORTHEASTRESIZE,
+    WEW_CT_NORTHWESTRESIZE,
+    WEW_CT_SOUTHRESIZE,
+    WEW_CT_SOUTHEASTRESIZE,
+    WEW_CT_SOUTHWESTRESIZE,
+    WEW_CT_WESTRESIZE,
+    WEW_CT_NORTHSOUTHRESIZE,
+    WEW_CT_EASTWESTRESIZE,
+    WEW_CT_NORTHEASTSOUTHWESTRESIZE,
+    WEW_CT_NORTHWESTSOUTHEASTRESIZE,
+    WEW_CT_COLUMNRESIZE,
+    WEW_CT_ROWRESIZE,
+    WEW_CT_MIDDLEPANNING,
+    WEW_CT_EASTPANNING,
+    WEW_CT_NORTHPANNING,
+    WEW_CT_NORTHEASTPANNING,
+    WEW_CT_NORTHWESTPANNING,
+    WEW_CT_SOUTHPANNING,
+    WEW_CT_SOUTHEASTPANNING,
+    WEW_CT_SOUTHWESTPANNING,
+    WEW_CT_WESTPANNING,
+    WEW_CT_MOVE,
+    WEW_CT_VERTICALTEXT,
+    WEW_CT_CELL,
+    WEW_CT_CONTEXTMENU,
+    WEW_CT_ALIAS,
+    WEW_CT_PROGRESS,
+    WEW_CT_NODROP,
+    WEW_CT_COPY,
+    WEW_CT_NONE,
+    WEW_CT_NOTALLOWED,
+    WEW_CT_ZOOMIN,
+    WEW_CT_ZOOMOUT,
+    WEW_CT_GRAB,
+    WEW_CT_GRABBING,
+    WEW_CT_MIDDLE_PANNING_VERTICAL,
+    WEW_CT_MIDDLE_PANNING_HORIZONTAL,
+    WEW_CT_CUSTOM,
+    WEW_CT_DND_NONE,
+    WEW_CT_DND_MOVE,
+    WEW_CT_DND_COPY,
+    WEW_CT_DND_LINK,
+    WEW_CT_NUM_VALUES,
+} CursorType;
+
 typedef enum
 {
     ///
     /// Default logging (currently INFO logging).
     ///
-    WEBVIEW_LOG_DEFAULT,
+    WEW_LOG_DEFAULT,
 
     ///
     /// Verbose logging.
     ///
-    WEBVIEW_LOG_VERBOSE,
+    WEW_LOG_VERBOSE,
 
     ///
     /// DEBUG logging.
     ///
-    WEBVIEW_LOG_DEBUG = WEBVIEW_LOG_VERBOSE,
+    WEW_LOG_DEBUG = WEW_LOG_VERBOSE,
 
     ///
     /// INFO logging.
     ///
-    WEBVIEW_LOG_INFO,
+    WEW_LOG_INFO,
 
     ///
     /// WARNING logging.
     ///
-    WEBVIEW_LOG_WARNING,
+    WEW_LOG_WARNING,
 
     ///
     /// ERROR logging.
     ///
-    WEBVIEW_LOG_ERROR,
+    WEW_LOG_ERROR,
 
     ///
     /// FATAL logging.
     ///
-    WEBVIEW_LOG_FATAL,
+    WEW_LOG_FATAL,
 
     ///
     /// Disable logging to file for all messages, and to stderr for messages with
     /// severity less than FATAL.
     ///
-    WEBVIEW_LOG_DISABLE = 99
+    WEW_LOG_DISABLE = 99
 } LogLevel;
 
 typedef struct
@@ -253,15 +311,16 @@ typedef struct
 
 typedef enum
 {
-    WEBVIEW_BEFORE_LOAD = 1,
-    WEBVIEW_LOADED = 2,
-    WEBVIEW_LOAD_ERROR = 3,
-    WEBVIEW_REQUEST_CLOSE = 4,
-    WEBVIEW_CLOSE = 5,
+    WEW_BEFORE_LOAD = 1,
+    WEW_LOADED = 2,
+    WEW_LOAD_ERROR = 3,
+    WEW_REQUEST_CLOSE = 4,
+    WEW_CLOSE = 5,
 } WebViewState;
 
 typedef struct
 {
+    void (*on_cursor)(CursorType type, void *context);
     void (*on_state_change)(WebViewState state, void *context);
     void (*on_ime_rect)(Rect rect, void *context);
     void (*on_frame)(const void *buf, Rect *rect, void *context);
@@ -276,24 +335,24 @@ typedef struct
 ///
 typedef enum
 {
-    WEBVIEW_EVENTFLAG_NONE = 0,
-    WEBVIEW_EVENTFLAG_CAPS_LOCK_ON = 1 << 0,
-    WEBVIEW_EVENTFLAG_SHIFT_DOWN = 1 << 1,
-    WEBVIEW_EVENTFLAG_CONTROL_DOWN = 1 << 2,
-    WEBVIEW_EVENTFLAG_ALT_DOWN = 1 << 3,
-    WEBVIEW_EVENTFLAG_LEFT_MOUSE_BUTTON = 1 << 4,
-    WEBVIEW_EVENTFLAG_MIDDLE_MOUSE_BUTTON = 1 << 5,
-    WEBVIEW_EVENTFLAG_RIGHT_MOUSE_BUTTON = 1 << 6,
+    WEW_EVENTFLAG_NONE = 0,
+    WEW_EVENTFLAG_CAPS_LOCK_ON = 1 << 0,
+    WEW_EVENTFLAG_SHIFT_DOWN = 1 << 1,
+    WEW_EVENTFLAG_CONTROL_DOWN = 1 << 2,
+    WEW_EVENTFLAG_ALT_DOWN = 1 << 3,
+    WEW_EVENTFLAG_LEFT_MOUSE_BUTTON = 1 << 4,
+    WEW_EVENTFLAG_MIDDLE_MOUSE_BUTTON = 1 << 5,
+    WEW_EVENTFLAG_RIGHT_MOUSE_BUTTON = 1 << 6,
     /// Mac OS-X command key.
-    WEBVIEW_EVENTFLAG_COMMAND_DOWN = 1 << 7,
-    WEBVIEW_EVENTFLAG_NUM_LOCK_ON = 1 << 8,
-    WEBVIEW_EVENTFLAG_IS_KEY_PAD = 1 << 9,
-    WEBVIEW_EVENTFLAG_IS_LEFT = 1 << 10,
-    WEBVIEW_EVENTFLAG_IS_RIGHT = 1 << 11,
-    WEBVIEW_EVENTFLAG_ALTGR_DOWN = 1 << 12,
-    WEBVIEW_EVENTFLAG_IS_REPEAT = 1 << 13,
-    WEBVIEW_EVENTFLAG_PRECISION_SCROLLING_DELTA = 1 << 14,
-    WEBVIEW_EVENTFLAG_SCROLL_BY_PAGE = 1 << 15,
+    WEW_EVENTFLAG_COMMAND_DOWN = 1 << 7,
+    WEW_EVENTFLAG_NUM_LOCK_ON = 1 << 8,
+    WEW_EVENTFLAG_IS_KEY_PAD = 1 << 9,
+    WEW_EVENTFLAG_IS_LEFT = 1 << 10,
+    WEW_EVENTFLAG_IS_RIGHT = 1 << 11,
+    WEW_EVENTFLAG_ALTGR_DOWN = 1 << 12,
+    WEW_EVENTFLAG_IS_REPEAT = 1 << 13,
+    WEW_EVENTFLAG_PRECISION_SCROLLING_DELTA = 1 << 14,
+    WEW_EVENTFLAG_SCROLL_BY_PAGE = 1 << 15,
 } EventFlags;
 
 typedef struct
@@ -320,9 +379,9 @@ typedef struct
 ///
 typedef enum
 {
-    WEBVIEW_MBT_LEFT = 0,
-    WEBVIEW_MBT_MIDDLE,
-    WEBVIEW_MBT_RIGHT,
+    WEW_MBT_LEFT = 0,
+    WEW_MBT_MIDDLE,
+    WEW_MBT_RIGHT,
 } MouseButton;
 
 ///
@@ -333,26 +392,26 @@ typedef enum
     ///
     /// Notification that a key transitioned from "up" to "down".
     ///
-    WEBVIEW_KEYEVENT_RAWKEYDOWN = 0,
+    WEW_KEYEVENT_RAWKEYDOWN = 0,
 
     ///
     /// Notification that a key was pressed. This does not necessarily correspond
     /// to a character depending on the key and language. Use KEYEVENT_CHAR for
     /// character input.
     ///
-    WEBVIEW_KEYEVENT_KEYDOWN,
+    WEW_KEYEVENT_KEYDOWN,
 
     ///
     /// Notification that a key was released.
     ///
-    WEBVIEW_KEYEVENT_KEYUP,
+    WEW_KEYEVENT_KEYUP,
 
     ///
     /// Notification that a character was typed. Use this for text input. Key
     /// down events may generate 0, 1, or more than one character event depending
     /// on the key, locale, and operating system.
     ///
-    WEBVIEW_KEYEVENT_CHAR
+    WEW_KEYEVENT_CHAR
 } KeyEventType;
 
 ///
@@ -414,10 +473,10 @@ typedef struct
 ///
 typedef enum
 {
-    WEBVIEW_TET_RELEASED = 0,
-    WEBVIEW_TET_PRESSED,
-    WEBVIEW_TET_MOVED,
-    WEBVIEW_TET_CANCELLED
+    WEW_TET_RELEASED = 0,
+    WEW_TET_PRESSED,
+    WEW_TET_MOVED,
+    WEW_TET_CANCELLED
 } TouchEventType;
 
 ///
@@ -425,11 +484,11 @@ typedef enum
 ///
 typedef enum
 {
-    WEBVIEW_POINTER_TYPE_TOUCH = 0,
-    WEBVIEW_POINTER_TYPE_MOUSE,
-    WEBVIEW_POINTER_TYPE_PEN,
-    WEBVIEW_POINTER_TYPE_ERASER,
-    WEBVIEW_POINTER_TYPE_UNKNOWN
+    WEW_POINTER_TYPE_TOUCH = 0,
+    WEW_POINTER_TYPE_MOUSE,
+    WEW_POINTER_TYPE_PEN,
+    WEW_POINTER_TYPE_ERASER,
+    WEW_POINTER_TYPE_UNKNOWN
 } PointerType;
 
 ///
@@ -496,87 +555,80 @@ typedef struct
 
 } TouchEvent;
 
-// clang-format off
-
 #ifdef __cplusplus
 extern "C"
 {
 
 #endif
 
-EXPORT int get_result_code();
+    EXPORT int get_result_code();
 
-EXPORT int execute_subprocess(int argc, const char **argv);
+    EXPORT int execute_subprocess(int argc, const char **argv);
 
-EXPORT void run_message_loop();
+    EXPORT void run_message_loop();
 
-EXPORT void quit_message_loop();
+    EXPORT void quit_message_loop();
 
-EXPORT void poll_message_loop();
+    EXPORT void poll_message_loop();
 
-EXPORT void *create_runtime(const RuntimeSettings *settings, RuntimeHandler handler);
+    EXPORT void *create_runtime(const RuntimeSettings *settings, RuntimeHandler handler);
 
-EXPORT bool execute_runtime(void *runtime, int argc, const char **argv);
+    EXPORT bool execute_runtime(void *runtime, int argc, const char **argv);
 
-///
-/// This function should be called on the main application thread to shut down
-/// the CEF browser process before the application exits.
-///
-EXPORT void close_runtime(void *runtime);
+    ///
+    /// This function should be called on the main application thread to shut down
+    /// the CEF browser process before the application exits.
+    ///
+    EXPORT void close_runtime(void *runtime);
 
-EXPORT void *create_webview(void *runtime,
-                            const char *url,
-                            const WebViewSettings *settings,
-                            WebViewHandler handler);
+    EXPORT void *create_webview(void *runtime,
+                                const char *url,
+                                const WebViewSettings *settings,
+                                WebViewHandler handler);
 
-EXPORT void close_webview(void *webview);
+    EXPORT void close_webview(void *webview);
 
-///
-/// Send a mouse click event to the browser.
-///
-EXPORT void webview_mouse_click(void *webview,
-                                MouseEvent event,
-                                MouseButton button,
-                                bool pressed);
+    ///
+    /// Send a mouse click event to the browser.
+    ///
+    EXPORT void webview_mouse_click(void *webview, MouseEvent event, MouseButton button, bool pressed);
 
-///
-/// Send a mouse wheel event to the browser.
-///
-EXPORT void webview_mouse_wheel(void *webview, MouseEvent event, int x, int y);
+    ///
+    /// Send a mouse wheel event to the browser.
+    ///
+    EXPORT void webview_mouse_wheel(void *webview, MouseEvent event, int x, int y);
 
-///
-/// Send a mouse move event to the browser.
-///
-EXPORT void webview_mouse_move(void *webview, MouseEvent event);
+    ///
+    /// Send a mouse move event to the browser.
+    ///
+    EXPORT void webview_mouse_move(void *webview, MouseEvent event);
 
-///
-/// Send a key event to the browser.
-///
-EXPORT void webview_keyboard(void *webview, KeyEvent event);
+    ///
+    /// Send a key event to the browser.
+    ///
+    EXPORT void webview_keyboard(void *webview, KeyEvent event);
 
-///
-/// Send a touch event to the browser.
-///
-EXPORT void webview_touch(void *webview, TouchEvent event);
+    ///
+    /// Send a touch event to the browser.
+    ///
+    EXPORT void webview_touch(void *webview, TouchEvent event);
 
-EXPORT void webview_ime_composition(void *webview, const char *input);
+    EXPORT void webview_ime_composition(void *webview, const char *input);
 
-EXPORT void webview_ime_set_composition(void *webview, const char *input, int x, int y);
+    EXPORT void webview_ime_set_composition(void *webview, const char *input, int x, int y);
 
-EXPORT void webview_send_message(void *webview, const char *message);
+    EXPORT void webview_send_message(void *webview, const char *message);
 
-EXPORT void webview_set_devtools_state(void *webview, bool is_open);
+    EXPORT void webview_set_devtools_state(void *webview, bool is_open);
 
-EXPORT void webview_resize(void *webview, int width, int height);
+    EXPORT void webview_resize(void *webview, int width, int height);
 
-EXPORT const void *webview_get_window_handle(void *webview);
+    EXPORT const void *webview_get_window_handle(void *webview);
 
-EXPORT void webview_set_focus(void *webview, bool enable);
+    EXPORT void webview_set_focus(void *webview, bool enable);
 
 #ifdef __cplusplus
 }
 #endif
 
-// clang-format on
-
-#endif /* library_h */
+#endif /* wew_h */

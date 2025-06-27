@@ -51,6 +51,63 @@ use crate::{
     utils::{AnySrtingCastRaw, GetSharedRef, ThreadSafePointer},
 };
 
+/// Represents the type of cursor
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum CursorType {
+    Pointer = 0,
+    Cross = 1,
+    Hand = 2,
+    IBeam = 3,
+    Wait = 4,
+    Help = 5,
+    EastResize = 6,
+    NorthResize = 7,
+    NorthEastResize = 8,
+    NorthWestResize = 9,
+    SouthResize = 10,
+    SouthEastResize = 11,
+    SouthWestResize = 12,
+    WestResize = 13,
+    NorthSouthResize = 14,
+    EastWestResize = 15,
+    NorthEastSouthWestResize = 16,
+    NorthWestSouthEastResize = 17,
+    ColumnResize = 18,
+    RowResize = 19,
+    MiddlePanning = 20,
+    EastPanning = 21,
+    NorthPanning = 22,
+    NorthEastPanning = 23,
+    NorthWestPanning = 24,
+    SouthPanning = 25,
+    SouthEastPanning = 26,
+    SouthWestPanning = 27,
+    WestPanning = 28,
+    Move = 29,
+    VerticalText = 30,
+    Cell = 31,
+    ContextMenu = 32,
+    Alias = 33,
+    Progress = 34,
+    NoDrop = 35,
+    Copy = 36,
+    None = 37,
+    NotAllowed = 38,
+    ZoomIn = 39,
+    ZoomOut = 40,
+    Grab = 41,
+    Grabbing = 42,
+    MiddlePanningVertical = 43,
+    MiddlePanningHorizontal = 44,
+    Custom = 45,
+    DndNone = 46,
+    DndMove = 47,
+    DndCopy = 48,
+    DndLink = 49,
+    NumValues = 50,
+}
+
 /// Represents the state of a web page
 ///
 /// The order of events is as follows:
@@ -98,6 +155,7 @@ impl WindowHandle {
 /// This trait is used to handle web view events.
 #[allow(unused)]
 pub trait WebViewHandler: Send + Sync {
+    fn on_cursor_change(&self, ty: CursorType) {}
     /// Called when the web page state changes
     ///
     /// You need to pay attention to status changes, determine whether loading
@@ -451,6 +509,7 @@ impl IWebView {
                 url.as_raw(),
                 &options,
                 sys::WebViewHandler {
+                    on_cursor: Some(on_cursor_callback),
                     on_state_change: Some(on_state_change_callback),
                     on_ime_rect: Some(on_ime_rect_callback),
                     on_frame: Some(on_frame_callback),
@@ -578,11 +637,21 @@ impl WebView<WindowlessRenderWebView> {
                     event.y = pos.y;
                 }
 
+                if *is_pressed {
+                    event.modifiers |= match button {
+                        MouseButton::Left => sys::EventFlags::WEW_EVENTFLAG_LEFT_MOUSE_BUTTON,
+                        MouseButton::Right => sys::EventFlags::WEW_EVENTFLAG_RIGHT_MOUSE_BUTTON,
+                        MouseButton::Middle => sys::EventFlags::WEW_EVENTFLAG_MIDDLE_MOUSE_BUTTON,
+                    } as u32;
+                } else {
+                    event.modifiers = 0;
+                };
+
                 unsafe {
                     sys::webview_mouse_click(
                         self.inner.raw.lock().as_ptr(),
                         *event,
-                        (*button).into(),
+                        button.clone().into(),
                         *is_pressed,
                     )
                 }
@@ -596,7 +665,7 @@ impl WebView<WindowlessRenderWebView> {
     ///
     /// Note that this function only works in windowless rendering mode.
     pub fn keyboard(&self, event: &KeyboardEvent) {
-        let mut modifiers = sys::EventFlags::WEBVIEW_EVENTFLAG_NONE as u32;
+        let mut modifiers = sys::EventFlags::WEW_EVENTFLAG_NONE as u32;
         for it in KeyboardModifiers::all() {
             if event.modifiers.contains(it) {
                 let flag: sys::EventFlags = it.into();
@@ -676,11 +745,11 @@ impl From<sys::WebViewState> for WebViewState {
         use sys::WebViewState;
 
         match value {
-            WebViewState::WEBVIEW_BEFORE_LOAD => Self::BeforeLoad,
-            WebViewState::WEBVIEW_LOADED => Self::Loaded,
-            WebViewState::WEBVIEW_LOAD_ERROR => Self::LoadError,
-            WebViewState::WEBVIEW_REQUEST_CLOSE => Self::RequestClose,
-            WebViewState::WEBVIEW_CLOSE => Self::Close,
+            WebViewState::WEW_BEFORE_LOAD => Self::BeforeLoad,
+            WebViewState::WEW_LOADED => Self::Loaded,
+            WebViewState::WEW_LOAD_ERROR => Self::LoadError,
+            WebViewState::WEW_REQUEST_CLOSE => Self::RequestClose,
+            WebViewState::WEW_CLOSE => Self::Close,
         }
     }
 }
@@ -690,9 +759,9 @@ impl Into<sys::KeyEventType> for KeyboardEventType {
         use sys::KeyEventType;
 
         match self {
-            Self::KeyDown => KeyEventType::WEBVIEW_KEYEVENT_KEYDOWN,
-            Self::KeyUp => KeyEventType::WEBVIEW_KEYEVENT_KEYUP,
-            Self::Char => KeyEventType::WEBVIEW_KEYEVENT_CHAR,
+            Self::KeyDown => KeyEventType::WEW_KEYEVENT_KEYDOWN,
+            Self::KeyUp => KeyEventType::WEW_KEYEVENT_KEYUP,
+            Self::Char => KeyEventType::WEW_KEYEVENT_CHAR,
         }
     }
 }
@@ -702,14 +771,14 @@ impl Into<sys::EventFlags> for KeyboardModifiers {
         use sys::EventFlags;
 
         match self {
-            Self::None => EventFlags::WEBVIEW_EVENTFLAG_NONE,
-            Self::Win => EventFlags::WEBVIEW_EVENTFLAG_COMMAND_DOWN,
-            Self::Shift => EventFlags::WEBVIEW_EVENTFLAG_SHIFT_DOWN,
-            Self::Ctrl => EventFlags::WEBVIEW_EVENTFLAG_CONTROL_DOWN,
-            Self::Alt => EventFlags::WEBVIEW_EVENTFLAG_ALT_DOWN,
-            Self::Command => EventFlags::WEBVIEW_EVENTFLAG_COMMAND_DOWN,
-            Self::CapsLock => EventFlags::WEBVIEW_EVENTFLAG_CAPS_LOCK_ON,
-            _ => EventFlags::WEBVIEW_EVENTFLAG_NONE,
+            Self::None => EventFlags::WEW_EVENTFLAG_NONE,
+            Self::Win => EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
+            Self::Shift => EventFlags::WEW_EVENTFLAG_SHIFT_DOWN,
+            Self::Ctrl => EventFlags::WEW_EVENTFLAG_CONTROL_DOWN,
+            Self::Alt => EventFlags::WEW_EVENTFLAG_ALT_DOWN,
+            Self::Command => EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
+            Self::CapsLock => EventFlags::WEW_EVENTFLAG_CAPS_LOCK_ON,
+            _ => EventFlags::WEW_EVENTFLAG_NONE,
         }
     }
 }
@@ -719,9 +788,9 @@ impl Into<sys::MouseButton> for MouseButton {
         use sys::MouseButton;
 
         match self {
-            Self::Left => MouseButton::WEBVIEW_MBT_LEFT,
-            Self::Middle => MouseButton::WEBVIEW_MBT_MIDDLE,
-            Self::Right => MouseButton::WEBVIEW_MBT_RIGHT,
+            Self::Left => MouseButton::WEW_MBT_LEFT,
+            Self::Middle => MouseButton::WEW_MBT_MIDDLE,
+            Self::Right => MouseButton::WEW_MBT_RIGHT,
         }
     }
 }
@@ -859,5 +928,19 @@ extern "C" fn on_message_callback(message: *const c_char, context: *mut c_void) 
                 handler.on_message(message)
             }
         }
+    }
+}
+
+extern "C" fn on_cursor_callback(ty: sys::CursorType, context: *mut c_void) {
+    if context.is_null() {
+        return;
+    }
+
+    let ty = unsafe { std::mem::transmute::<sys::CursorType, CursorType>(ty) };
+
+    let context = unsafe { &*(context as *mut WebViewContext) };
+    match &context.handler {
+        MixWebviewHnadler::WebViewHandler(handler) => handler.on_cursor_change(ty),
+        MixWebviewHnadler::WindowlessRenderWebViewHandler(handler) => handler.on_cursor_change(ty),
     }
 }

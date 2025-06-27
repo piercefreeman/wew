@@ -39,12 +39,12 @@ IWebViewLoad::IWebViewLoad(WebViewHandler &handler) : _handler(handler)
 
 void IWebViewLoad::OnLoadStart(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, TransitionType transition_type)
 {
-    _handler.on_state_change(WebViewState::WEBVIEW_BEFORE_LOAD, _handler.context);
+    _handler.on_state_change(WebViewState::WEW_BEFORE_LOAD, _handler.context);
 }
 
 void IWebViewLoad::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int httpStatusCode)
 {
-    _handler.on_state_change(WebViewState::WEBVIEW_LOADED, _handler.context);
+    _handler.on_state_change(WebViewState::WEW_LOADED, _handler.context);
     browser->GetHost()->SetFocus(true);
 }
 
@@ -54,7 +54,7 @@ void IWebViewLoad::OnLoadError(CefRefPtr<CefBrowser> browser,
                                const CefString &error_text,
                                const CefString &failed_url)
 {
-    _handler.on_state_change(WebViewState::WEBVIEW_LOAD_ERROR, _handler.context);
+    _handler.on_state_change(WebViewState::WEW_LOAD_ERROR, _handler.context);
 }
 
 /* CefLifeSpanHandler */
@@ -76,7 +76,7 @@ void IWebViewLifeSpan::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 
 bool IWebViewLifeSpan::DoClose(CefRefPtr<CefBrowser> browser)
 {
-    _handler.on_state_change(WebViewState::WEBVIEW_REQUEST_CLOSE, _handler.context);
+    _handler.on_state_change(WebViewState::WEW_REQUEST_CLOSE, _handler.context);
 
     return false;
 }
@@ -104,7 +104,7 @@ void IWebViewLifeSpan::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 {
     _browser = std::nullopt;
 
-    _handler.on_state_change(WebViewState::WEBVIEW_CLOSE, _handler.context);
+    _handler.on_state_change(WebViewState::WEW_CLOSE, _handler.context);
 }
 
 /* CefDragHandler */
@@ -132,6 +132,14 @@ void IWebViewDisplay::OnFullscreenModeChange(CefRefPtr<CefBrowser> browser, bool
 {
     _handler.on_fullscreen_change(fullscreen, _handler.context);
 };
+
+bool IWebViewDisplay::OnCursorChange(CefRefPtr<CefBrowser> browser,
+                                     CefCursorHandle cursor,
+                                     cef_cursor_type_t type,
+                                     const CefCursorInfo &custom_cursor_info)
+{
+    _handler.on_cursor(static_cast<CursorType>(static_cast<int>(type)), _handler.context);
+}
 
 /* CefRenderHandler */
 

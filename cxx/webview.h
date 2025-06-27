@@ -152,6 +152,14 @@ class IWebViewDisplay : public CefDisplayHandler
     ///
     void OnFullscreenModeChange(CefRefPtr<CefBrowser> browser, bool fullscreen) override;
 
+    ///
+    /// Called when the browser's cursor has changed.
+    ///
+    virtual bool OnCursorChange(CefRefPtr<CefBrowser> browser,
+                                CefCursorHandle cursor,
+                                cef_cursor_type_t type,
+                                const CefCursorInfo &custom_cursor_info) override;
+
   private:
     WebViewHandler &_handler;
 
