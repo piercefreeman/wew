@@ -742,55 +742,47 @@ impl WebView<WindowlessRenderWebView> {
 
 impl From<sys::WebViewState> for WebViewState {
     fn from(value: sys::WebViewState) -> Self {
-        use sys::WebViewState;
-
         match value {
-            WebViewState::WEW_BEFORE_LOAD => Self::BeforeLoad,
-            WebViewState::WEW_LOADED => Self::Loaded,
-            WebViewState::WEW_LOAD_ERROR => Self::LoadError,
-            WebViewState::WEW_REQUEST_CLOSE => Self::RequestClose,
-            WebViewState::WEW_CLOSE => Self::Close,
+            sys::WebViewState::WEW_BEFORE_LOAD => Self::BeforeLoad,
+            sys::WebViewState::WEW_LOADED => Self::Loaded,
+            sys::WebViewState::WEW_LOAD_ERROR => Self::LoadError,
+            sys::WebViewState::WEW_REQUEST_CLOSE => Self::RequestClose,
+            sys::WebViewState::WEW_CLOSE => Self::Close,
         }
     }
 }
 
 impl Into<sys::KeyEventType> for KeyboardEventType {
     fn into(self) -> sys::KeyEventType {
-        use sys::KeyEventType;
-
         match self {
-            Self::KeyDown => KeyEventType::WEW_KEYEVENT_KEYDOWN,
-            Self::KeyUp => KeyEventType::WEW_KEYEVENT_KEYUP,
-            Self::Char => KeyEventType::WEW_KEYEVENT_CHAR,
+            Self::KeyDown => sys::KeyEventType::WEW_KEYEVENT_KEYDOWN,
+            Self::KeyUp => sys::KeyEventType::WEW_KEYEVENT_KEYUP,
+            Self::Char => sys::KeyEventType::WEW_KEYEVENT_CHAR,
         }
     }
 }
 
 impl Into<sys::EventFlags> for KeyboardModifiers {
     fn into(self) -> sys::EventFlags {
-        use sys::EventFlags;
-
         match self {
-            Self::None => EventFlags::WEW_EVENTFLAG_NONE,
-            Self::Win => EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
-            Self::Shift => EventFlags::WEW_EVENTFLAG_SHIFT_DOWN,
-            Self::Ctrl => EventFlags::WEW_EVENTFLAG_CONTROL_DOWN,
-            Self::Alt => EventFlags::WEW_EVENTFLAG_ALT_DOWN,
-            Self::Command => EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
-            Self::CapsLock => EventFlags::WEW_EVENTFLAG_CAPS_LOCK_ON,
-            _ => EventFlags::WEW_EVENTFLAG_NONE,
+            Self::None => sys::EventFlags::WEW_EVENTFLAG_NONE,
+            Self::Win => sys::EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
+            Self::Shift => sys::EventFlags::WEW_EVENTFLAG_SHIFT_DOWN,
+            Self::Ctrl => sys::EventFlags::WEW_EVENTFLAG_CONTROL_DOWN,
+            Self::Alt => sys::EventFlags::WEW_EVENTFLAG_ALT_DOWN,
+            Self::Command => sys::EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
+            Self::CapsLock => sys::EventFlags::WEW_EVENTFLAG_CAPS_LOCK_ON,
+            _ => sys::EventFlags::WEW_EVENTFLAG_NONE,
         }
     }
 }
 
 impl Into<sys::MouseButton> for MouseButton {
     fn into(self) -> sys::MouseButton {
-        use sys::MouseButton;
-
         match self {
-            Self::Left => MouseButton::WEW_MBT_LEFT,
-            Self::Middle => MouseButton::WEW_MBT_MIDDLE,
-            Self::Right => MouseButton::WEW_MBT_RIGHT,
+            Self::Left => sys::MouseButton::WEW_MBT_LEFT,
+            Self::Middle => sys::MouseButton::WEW_MBT_MIDDLE,
+            Self::Right => sys::MouseButton::WEW_MBT_RIGHT,
         }
     }
 }
