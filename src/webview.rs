@@ -48,7 +48,7 @@ use crate::{
     request::{CustomRequestHandlerFactory, ICustomRequestHandlerFactory},
     runtime::{IRuntime, Runtime},
     sys,
-    utils::{AnySrtingCastRaw, GetSharedRef, ThreadSafePointer},
+    utils::{AnyStringCast, GetSharedRef, ThreadSafePointer},
 };
 
 /// Represents the type of cursor

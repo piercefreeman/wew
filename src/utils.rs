@@ -1,6 +1,6 @@
 use std::{
     cell::Cell,
-    ffi::{CString, c_char},
+    ffi::{CString, c_char, c_void},
     ptr::{NonNull, null},
 };
 
@@ -45,11 +45,11 @@ impl<T> ThreadSafePointer<T> {
     }
 }
 
-pub(crate) trait AnySrtingCastRaw {
+pub(crate) trait AnyStringCast {
     fn as_raw(&self) -> *const c_char;
 }
 
-impl AnySrtingCastRaw for Option<CString> {
+impl AnyStringCast for Option<CString> {
     #[inline]
     fn as_raw(&self) -> *const c_char {
         self.as_ref()
@@ -58,7 +58,7 @@ impl AnySrtingCastRaw for Option<CString> {
     }
 }
 
-impl AnySrtingCastRaw for CString {
+impl AnyStringCast for CString {
     #[inline]
     fn as_raw(&self) -> *const c_char {
         self.as_c_str().as_ptr()
@@ -156,70 +156,72 @@ pub fn is_main_thread() -> bool {
 /// `isHandlingSendEvent`, otherwise it will cause unexpected crashes. This
 /// method automatically fixes this issue by adding the necessary implementation
 /// to `NSApplication`.
-#[cfg(target_os = "macos")]
 pub fn startup_nsapplication() -> bool {
-    static HANDLING_SEND_EVENT: AtomicBool = AtomicBool::new(false);
-
-    extern "C" fn is_handling_send_event(_: &AnyObject, _: Sel) -> Bool {
-        if HANDLING_SEND_EVENT.load(Ordering::Relaxed) {
-            Bool::YES
-        } else {
-            Bool::NO
-        }
-    }
-
-    extern "C" fn set_handling_send_event(_: &AnyObject, _: Sel, value: Bool) {
-        HANDLING_SEND_EVENT.store(value.as_bool(), Ordering::Relaxed);
-    }
-
-    let app = if let Some(app) =
-        AnyClass::get(unsafe { &CStr::from_bytes_with_nul_unchecked(b"NSApplication\0") })
+    #[cfg(target_os = "macos")]
     {
-        app
-    } else {
-        return false;
-    };
+        static HANDLING_SEND_EVENT: AtomicBool = AtomicBool::new(false);
 
-    {
-        let sel = Sel::register(unsafe {
-            &CStr::from_bytes_with_nul_unchecked(b"isHandlingSendEvent\0")
-        });
-
-        if !app.responds_to(sel.clone()) {
-            if !unsafe {
-                class_addMethod(
-                    app as *const _ as *mut _,
-                    sel,
-                    std::mem::transmute(
-                        is_handling_send_event as extern "C" fn(&AnyObject, Sel) -> Bool,
-                    ),
-                    "c@:\0".as_ptr() as _,
-                )
-                .as_bool()
-            } {
-                return false;
+        extern "C" fn is_handling_send_event(_: &AnyObject, _: Sel) -> Bool {
+            if HANDLING_SEND_EVENT.load(Ordering::Relaxed) {
+                Bool::YES
+            } else {
+                Bool::NO
             }
         }
-    }
 
-    {
-        let sel = Sel::register(unsafe {
-            &CStr::from_bytes_with_nul_unchecked(b"setHandlingSendEvent:\0")
-        });
+        extern "C" fn set_handling_send_event(_: &AnyObject, _: Sel, value: Bool) {
+            HANDLING_SEND_EVENT.store(value.as_bool(), Ordering::Relaxed);
+        }
 
-        if !app.responds_to(sel.clone()) {
-            if !unsafe {
-                class_addMethod(
-                    app as *const _ as *mut _,
-                    sel,
-                    std::mem::transmute(
-                        set_handling_send_event as extern "C" fn(&AnyObject, Sel, Bool),
-                    ),
-                    "v@:c\0".as_ptr() as _,
-                )
-                .as_bool()
-            } {
-                return false;
+        let app = if let Some(app) =
+            AnyClass::get(unsafe { &CStr::from_bytes_with_nul_unchecked(b"NSApplication\0") })
+        {
+            app
+        } else {
+            return false;
+        };
+
+        {
+            let sel = Sel::register(unsafe {
+                &CStr::from_bytes_with_nul_unchecked(b"isHandlingSendEvent\0")
+            });
+
+            if !app.responds_to(sel.clone()) {
+                if !unsafe {
+                    class_addMethod(
+                        app as *const _ as *mut _,
+                        sel,
+                        std::mem::transmute(
+                            is_handling_send_event as extern "C" fn(&AnyObject, Sel) -> Bool,
+                        ),
+                        "c@:\0".as_ptr() as _,
+                    )
+                    .as_bool()
+                } {
+                    return false;
+                }
+            }
+        }
+
+        {
+            let sel = Sel::register(unsafe {
+                &CStr::from_bytes_with_nul_unchecked(b"setHandlingSendEvent:\0")
+            });
+
+            if !app.responds_to(sel.clone()) {
+                if !unsafe {
+                    class_addMethod(
+                        app as *const _ as *mut _,
+                        sel,
+                        std::mem::transmute(
+                            set_handling_send_event as extern "C" fn(&AnyObject, Sel, Bool),
+                        ),
+                        "v@:c\0".as_ptr() as _,
+                    )
+                    .as_bool()
+                } {
+                    return false;
+                }
             }
         }
     }
@@ -236,4 +238,28 @@ pub(crate) trait GetSharedRef {
     type Ref: Clone;
 
     fn get_shared_ref(&self) -> Self::Ref;
+}
+
+/// Post a task to the main thread for execution.
+///
+/// Please note that you should not post blocking tasks, as this will severely
+/// affect the main thread message loop.
+pub fn post_main<T>(task: T) -> bool
+where
+    T: FnOnce() + Send + Sync + 'static,
+{
+    extern "C" fn post_main_callback(context: *mut c_void) {
+        if context.is_null() {
+            return;
+        }
+
+        (unsafe { Box::from_raw(context as *mut Box<dyn FnOnce() + Send + Sync + 'static>) })();
+    }
+
+    unsafe {
+        crate::sys::post_task_with_main_thread(
+            Some(post_main_callback),
+            Box::into_raw(Box::new(Box::new(task))) as _,
+        )
+    }
 }

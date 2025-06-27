@@ -139,6 +139,8 @@ bool IWebViewDisplay::OnCursorChange(CefRefPtr<CefBrowser> browser,
                                      const CefCursorInfo &custom_cursor_info)
 {
     _handler.on_cursor(static_cast<CursorType>(static_cast<int>(type)), _handler.context);
+
+    return true;
 }
 
 /* CefRenderHandler */

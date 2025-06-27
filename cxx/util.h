@@ -29,4 +29,29 @@
 
 CefMainArgs get_main_args(int argc, const char **argv);
 
+typedef void (*ITaskCallback)(void *context);
+
+class ITask : public CefTask
+{
+  public:
+    // clang-format off
+    ITask(ITaskCallback callback, void *context) 
+        : _callback(callback)
+        , _context(context)
+    {
+    }
+    // clang-format on
+
+    void Execute() override
+    {
+        _callback(_context);
+    }
+
+  private:
+    ITaskCallback _callback = nullptr;
+    void *_context = nullptr;
+
+    IMPLEMENT_REFCOUNTING(ITask);
+};
+
 #endif /* util_h */

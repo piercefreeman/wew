@@ -18,7 +18,7 @@ use crate::{
     WindowlessRenderWebView,
     request::{CustomSchemeAttributes, ICustomRequestHandlerFactory},
     sys,
-    utils::{AnySrtingCastRaw, Args, GetSharedRef, ThreadSafePointer, is_main_thread},
+    utils::{AnyStringCast, Args, GetSharedRef, ThreadSafePointer, is_main_thread},
     webview::{
         MixWebviewHnadler, WebView, WebViewAttributes, WebViewHandler,
         WindowlessRenderWebViewHandler,

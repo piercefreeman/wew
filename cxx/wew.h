@@ -561,7 +561,9 @@ extern "C"
 
 #endif
 
-    EXPORT int get_result_code();
+    EXPORT bool post_task_with_main_thread(void (*callback)(void *context), void *context);
+
+    EXPORT int get_exit_code();
 
     EXPORT int execute_subprocess(int argc, const char **argv);
 

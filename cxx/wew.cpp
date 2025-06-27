@@ -11,10 +11,16 @@
 
 #include "runtime.h"
 #include "subprocess.h"
+#include "util.h"
 #include "webview.h"
 #include "wew.h"
 
-int get_result_code()
+bool post_task_with_main_thread(void (*callback)(void *context), void *context)
+{
+    return CefPostTask(TID_UI, new ITask(callback, context));
+}
+
+int get_exit_code()
 {
     return CefGetExitCode();
 }
