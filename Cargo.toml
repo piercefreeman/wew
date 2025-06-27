@@ -15,7 +15,6 @@ categories = ["gui"]
 bitflags = "2.9.1"
 parking_lot = "0.12"
 url = "2.5.4"
-log = "0.4.27"
 mime_guess = "2.0.5"
 winit = { version = "0.30", optional = true }
 tokio = { version = "1", features = ["rt"], optional = true }

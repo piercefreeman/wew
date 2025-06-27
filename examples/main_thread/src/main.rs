@@ -5,8 +5,7 @@ use std::{
 
 use wew::{
     MainThreadMessageLoop, MessageLoopAbstract, NativeWindowWebView,
-    log::LevelFilter,
-    runtime::RuntimeHandler,
+    runtime::{RuntimeHandler, LogLevel},
     webview::{WebViewAttributes, WebViewHandler, WebViewState},
 };
 
@@ -43,7 +42,7 @@ fn main() {
         // Set cache path, here we use environment variables passed by the build script.
         .with_root_cache_path(option_env!("CACHE_PATH").unwrap())
         .with_cache_path(option_env!("CACHE_PATH").unwrap())
-        .with_log_severity(LevelFilter::Info);
+        .with_log_severity(LogLevel::Info);
 
     let (tx, rx) = channel();
 

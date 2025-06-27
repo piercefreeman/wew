@@ -13,8 +13,7 @@ use parking_lot::Mutex;
 use wew::{
     MessageLoopAbstract, MessagePumpLoop, Rect, WindowlessRenderWebView,
     events::EventAdapter,
-    log::LevelFilter,
-    runtime::{MessagePumpRuntimeHandler, Runtime, RuntimeHandler},
+    runtime::{LogLevel, MessagePumpRuntimeHandler, Runtime, RuntimeHandler},
     webview::{
         WebView, WebViewAttributesBuilder, WebViewHandler, WindowHandle,
         WindowlessRenderWebViewHandler,
@@ -148,7 +147,7 @@ impl Webview {
             // Set cache path, here we use environment variables passed by the build script.
             .with_root_cache_path(option_env!("CACHE_PATH").unwrap())
             .with_cache_path(option_env!("CACHE_PATH").unwrap())
-            .with_log_severity(LevelFilter::Info);
+            .with_log_severity(LogLevel::Info);
 
         // Create runtime, wait for the `on_context_initialized` event to be triggered
         // before considering the creation successful.

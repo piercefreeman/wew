@@ -10,7 +10,6 @@ use std::{
     thread,
 };
 
-use log::LevelFilter;
 use parking_lot::Mutex;
 
 use crate::{
@@ -24,6 +23,16 @@ use crate::{
         WindowlessRenderWebViewHandler,
     },
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LogLevel {
+    Off,
+    Info,
+    Error,
+    Warn,
+    Debug,
+    Trace,
+}
 
 /// Runtime configuration attributes
 #[derive(Default)]
@@ -101,7 +110,7 @@ pub struct RuntimeAttributes<R, W> {
     log_file: Option<CString>,
 
     /// The log severity
-    log_severity: Option<LevelFilter>,
+    log_severity: Option<LogLevel>,
 
     /// The javascript flags
     javascript_flags: Option<CString>,
@@ -233,7 +242,7 @@ impl<R, W> RuntimeAttributesBuilder<R, W> {
     }
 
     /// Set the log severity
-    pub fn with_log_severity(mut self, value: LevelFilter) -> Self {
+    pub fn with_log_severity(mut self, value: LogLevel) -> Self {
         self.0.log_severity = Some(value);
 
         self
@@ -431,7 +440,7 @@ impl IRuntime {
             framework_dir_path: attr.framework_dir_path.as_raw(),
             external_message_pump: attr.external_message_pump,
             multi_threaded_message_loop: attr.multi_threaded_message_loop,
-            log_severity: attr.log_severity.unwrap_or(LevelFilter::Off).into(),
+            log_severity: attr.log_severity.unwrap_or(LogLevel::Off).into(),
             custom_scheme: custom_scheme
                 .as_ref()
                 .map(|it| it as *const _)
@@ -598,7 +607,7 @@ impl<R> Runtime<R, NativeWindowWebView> {
     }
 }
 
-impl Into<sys::LogLevel> for LevelFilter {
+impl Into<sys::LogLevel> for LogLevel {
     fn into(self) -> sys::LogLevel {
         match self {
             Self::Off => sys::LogLevel::WEW_LOG_DISABLE,
