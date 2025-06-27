@@ -18,6 +18,8 @@ pub mod runtime;
 /// `WebView` module and related types.
 pub mod webview;
 
+use std::sync::atomic::Ordering;
+
 use self::runtime::{RUNTIME_RUNNING, RuntimeAttributesBuilder};
 
 #[cfg(feature = "winit")]
@@ -106,6 +108,10 @@ impl MainThreadMessageLoop {
     /// Note that this function will block the current thread until the message
     /// loop ends.
     pub fn block_run(&self) {
+        if !utils::is_main_thread() {
+            panic!("this operation is not allowed in non-main threads!");
+        }
+
         unsafe { sys::run_message_loop() }
     }
 
@@ -115,6 +121,10 @@ impl MainThreadMessageLoop {
     ///
     /// Calling this function will cause `block_run` to exit and return.
     pub fn quit(&self) {
+        if !utils::is_main_thread() {
+            panic!("this operation is not allowed in non-main threads!");
+        }
+
         unsafe {
             sys::quit_message_loop();
         }
@@ -138,7 +148,9 @@ impl MessagePumpLoop {
     /// Note that this function won't block the current thread, external code
     /// needs to drive the message loop pump.
     pub fn poll(&self) {
-        use std::sync::atomic::Ordering;
+        if !utils::is_main_thread() {
+            panic!("this operation is not allowed in non-main threads!");
+        }
 
         if RUNTIME_RUNNING.load(Ordering::Relaxed) {
             unsafe { sys::poll_message_loop() }
@@ -191,7 +203,7 @@ pub fn execute_subprocess() -> bool {
     }
 
     if !utils::is_main_thread() {
-        return false;
+        panic!("this operation is not allowed in non-main threads!");
     }
 
     let args = utils::Args::default();
@@ -205,6 +217,8 @@ pub fn execute_subprocess() -> bool {
 /// Note that if the current process is a subprocess, it will block until the
 /// subprocess exits.
 pub fn is_subprocess() -> bool {
+    // TODO:
+    //
     // This check is not very strict, but processes with a "type" parameter can
     // generally be considered subprocesses, unless the main process also uses
     // this parameter.

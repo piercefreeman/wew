@@ -1,4 +1,5 @@
 use std::{
+    cell::Cell,
     ffi::{CString, c_char},
     ptr::{NonNull, null},
 };
@@ -103,35 +104,47 @@ impl Args {
 ///
 /// `true` if the current thread is the main thread, `false` otherwise.
 pub fn is_main_thread() -> bool {
-    #[allow(unused)]
+    thread_local! {
+        static IS_MAIN_THREAD: Cell<Option<bool>> = Cell::new(None);
+    }
+
+    if let Some(is_main_thread) = IS_MAIN_THREAD.get() {
+        return is_main_thread;
+    }
+
+    #[allow(unused_assignments)]
     let mut is_main_thread = false;
 
-    #[cfg(target_os = "windows")]
     {
-        static mut MAIN_THREAD_ID: u32 = 0;
+        #[cfg(target_os = "windows")]
+        {
+            static mut MAIN_THREAD_ID: u32 = 0;
 
-        #[used]
-        #[allow(non_upper_case_globals)]
-        #[unsafe(link_section = ".CRT$XCU")]
-        static INIT_MAIN_THREAD_ID: unsafe fn() = {
-            unsafe fn initer() {
-                unsafe { MAIN_THREAD_ID = GetCurrentThreadId() };
-            }
+            #[used]
+            #[allow(non_upper_case_globals)]
+            #[unsafe(link_section = ".CRT$XCU")]
+            static INIT_MAIN_THREAD_ID: unsafe fn() = {
+                unsafe fn initer() {
+                    unsafe { MAIN_THREAD_ID = GetCurrentThreadId() };
+                }
 
-            initer
-        };
+                initer
+            };
 
-        is_main_thread = unsafe { GetCurrentThreadId() == MAIN_THREAD_ID };
-    }
+            is_main_thread = unsafe { GetCurrentThreadId() == MAIN_THREAD_ID };
+        }
 
-    #[cfg(target_os = "macos")]
-    {
-        is_main_thread = unsafe { msg_send![class!(NSThread), isMainThread] };
-    }
+        #[cfg(target_os = "macos")]
+        {
+            is_main_thread = unsafe { msg_send![class!(NSThread), isMainThread] };
+        }
 
-    #[cfg(target_os = "linux")]
-    {
-        is_main_thread = { syscall(SYS_gettid) == getpid() as c_long };
+        #[cfg(target_os = "linux")]
+        {
+            is_main_thread = { syscall(SYS_gettid) == getpid() as c_long };
+        }
+
+        IS_MAIN_THREAD.set(Some(is_main_thread));
     }
 
     is_main_thread
