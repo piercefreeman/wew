@@ -68,7 +68,7 @@ However, it is important to note that if the WebView manages window events on it
 
 Let's assume your application name is Kyle.
 
-First, you need to download the CEF preset file. Visit `https://cef-builds.spotifycdn.com/index.html` to download the precompiled file version `cef_binary_137.0.17+gf354b0e+chromium-137.0.7151.104`.
+First, you need to download the CEF preset file. Visit the [CEF Automated Builds](https://cef-builds.spotifycdn.com/index.html#windows64:cef_binary_137.0.17%2Bgf354b0e%2Bchromium-137.0.7151.104) page to download the precompiled file version.
 
 #### Windows
 
