@@ -190,16 +190,7 @@ impl WebViewAbstract for NativeWindowWebView {}
 ///
 /// Do not call this function in an asynchronous runtime, such as tokio,
 /// which can lead to unexpected crashes!
-///
-/// Enabling the `tokio` feature allows for automatic checking.
 pub fn execute_subprocess() -> bool {
-    #[cfg(feature = "tokio")]
-    {
-        if tokio::runtime::Handle::try_current().is_ok() {
-            panic!("execute_subprocess is not allowed in tokio runtime");
-        }
-    }
-
     if !utils::is_main_thread() {
         panic!("this operation is not allowed in non-main threads!");
     }
