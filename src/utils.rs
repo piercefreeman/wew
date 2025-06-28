@@ -1,3 +1,36 @@
+//! This module is used to provide some utility functions and types.
+//!
+//! ## macOS
+//!
+//! On macOS, `NSApplication` must implement the `isHandlingSendEvent` method,
+//! otherwise it will cause the wew runtime to crash.
+//!
+//! Therefore, you need to manually call the **`inject_nsapplication`** method
+//! to fix this issue. This will automatically register the
+//! `isHandlingSendEvent` method to the `NSApplication` class.
+//!
+//! ```no_run
+//! fn main() {
+//!     #[cfg(target_os = "macos")]
+//!     wew::utils::inject_nsapplication();
+//! }
+//! ```
+//!
+//! If you are using `winit` application, you need to register before creating
+//! the event loop.
+//!
+//! ```no_run
+//! fn main() {
+//!     let event_loop = EventLoop::new().unwrap();
+//!     event_loop.set_control_flow(ControlFlow::Wait);
+//!
+//!     #[cfg(target_os = "macos")]
+//!     wew::utils::inject_nsapplication();
+//!
+//!     event_loop.run_app(&mut App::default()).unwrap();
+//! }
+//! ```
+
 use std::{
     cell::Cell,
     ffi::{CString, c_char, c_void},
@@ -153,7 +186,7 @@ pub fn is_main_thread() -> bool {
 /// `isHandlingSendEvent`, otherwise it will cause unexpected crashes. This
 /// method automatically fixes this issue by adding the necessary implementation
 /// to `NSApplication`.
-pub fn startup_nsapplication() -> bool {
+pub fn inject_nsapplication() -> bool {
     #[cfg(target_os = "macos")]
     {
         static HANDLING_SEND_EVENT: AtomicBool = AtomicBool::new(false);

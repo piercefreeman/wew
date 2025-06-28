@@ -170,7 +170,7 @@ fn main() -> Result<()> {
     // For macOS, we need to inject a delegate for winit, otherwise CEF cannot
     // handle macOS text selection events.
     #[cfg(target_os = "macos")]
-    wew::utils::startup_nsapplication();
+    wew::utils::inject_nsapplication();
 
     event_loop.run_app(&mut App::new(event_loop_proxy))?;
     Ok(())

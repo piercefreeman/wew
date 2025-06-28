@@ -1,3 +1,31 @@
+//! Used to handle window events.
+//!
+//! This module is used to handle keyboard, mouse, and input method events.
+//!
+//! ## Examples
+//!
+//! ```no_run
+//! struct App {
+//!     webview: WebView<MessagePumpLoop, WindowlessRenderWebView>,
+//!     event_adapter: EventAdapter,
+//! }
+//!
+//! impl ApplicationHandler for App {
+//!     fn window_event(
+//!         &mut self,
+//!         event_loop: &ActiveEventLoop,
+//!         _window_id: WindowId,
+//!         event: WindowEvent,
+//!     ) {
+//!         self.event_adapter
+//!             .on_winit_window_event(&mut self.webview, &event);
+//!     }
+//! }
+//! ```
+//!
+//! This example shows how to use the built-in `winit` event adapter to
+//! automatically handle `WindowEvent`.
+
 use bitflags::bitflags;
 
 /// Represents a position

@@ -1,3 +1,4 @@
+//! This module is used to manage a single web page.
 //!
 //! ## Communication with Web Pages
 //!
@@ -25,10 +26,38 @@
 //! window.MessageTransport.send("Send message to Rust");
 //! ```
 //!
-//! `WebViewHandler::on_message` is used to receive messages sent by
-//! `MessageTransport.send`, while `MessageTransport.on` is used to receive
-//! messages sent by `WebView::send_message`. Sending and receiving messages are
-//! full-duplex and asynchronous.
+//! **`WebViewHandler::on_message`** is used to receive messages sent by
+//! **`MessageTransport.send`**, while **`MessageTransport.on`** is used to
+//! receive messages sent by **`WebView::send_message`**. Sending and receiving
+//! messages are full-duplex and asynchronous.
+//!
+//! ## WebView Types
+//!
+//! There are two types of runtime:
+//!
+//! #### WindowlessRenderWebView
+//!
+//! Off-screen rendering, also known as OSR mode in CEF. In this mode, the web
+//! page does not create a window, and the rendered content is passed to the
+//! external through the **`WindowlessRenderWebViewHandler::on_frame`**
+//! callback, allowing external code to handle rendering themselves.
+//!
+//! In this mode, the web page does not automatically handle any mouse,
+//! keyboard, or other window-related events because there is no window. You
+//! need to manually call the corresponding methods on `WebView` based on events
+//! to make it respond to events.
+//!
+//! #### NativeWindowWebView
+//!
+//! Window rendering, also known as window mode in CEF. In this mode, the web
+//! page creates a window and automatically handles mouse, keyboard, and other
+//! window-related events.
+//!
+//! If you provide a window handle to `WebView`, the `WebView` window will be a
+//! child window of that window.
+//!
+//! If you do not provide a window handle, `WebView` will automatically create a
+//! Chromium-style window.
 
 use std::{
     ffi::{CStr, CString, c_char, c_int, c_void},
@@ -155,6 +184,10 @@ impl WindowHandle {
 /// This trait is used to handle web view events.
 #[allow(unused)]
 pub trait WebViewHandler: Send + Sync {
+    /// Called when the cursor changes
+    ///
+    /// When the web page wants to change the mouse pointer style, it will be
+    /// triggered, such as moving to a link.
     fn on_cursor_change(&self, ty: CursorType) {}
     /// Called when the web page state changes
     ///
@@ -582,7 +615,7 @@ impl<W> WebView<W> {
     /// This function is used to send a message to the web page.
     ///
     /// Messages sent from the web page are received through the
-    /// `WebViewHandler::on_message` callback.
+    /// **`WebViewHandler::on_message`** callback.
     pub fn send_message(&self, message: &str) {
         let message = CString::new(message).unwrap();
 

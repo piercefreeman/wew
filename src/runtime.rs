@@ -1,3 +1,72 @@
+//! This module is used to manage the runtime.
+//!
+//! The runtime is used to manage multi-process models and message loops, which
+//! are used to maintain the main process (application process) and start
+//! maintaining sub-processes (rendering, network threads, etc.).
+//!
+//! ## Uniqueness
+//!
+//! Only one runtime can be created in a process. Repeated creation will trigger
+//! this error.
+//!
+//! Because the runtime is bound to the current process and the message loop of
+//! the UI thread, it is not possible to create multiple runtimes at the same
+//! time.
+//!
+//! ## Runtime types
+//!
+//! There are three types of runtimes:
+//!
+//! #### MainThreadMessageLoop
+//!
+//! Main thread message loop means you can let wew's runtime exclusively occupy
+//! the main thread and run the message loop in the main thread.
+//!
+//! The runtime will block the main thread until the message loop ends.
+//!
+//! ```no_run
+//! MainThreadMessageLoop::default().block_run();
+//! ```
+//!
+//! It will block until the message loop ends or you manually quit. You can exit
+//! the current message loop by calling
+//! **`MainThreadMessageLoop::default().quit()`**.
+//!
+//!
+//! #### MultiThreadMessageLoop
+//!
+//! Multi-threaded message loop means you can let wew's runtime run the message
+//! loop in multiple threads.
+//!
+//! The runtime will not block the main thread, and you don't need to manually
+//! run or drive it, the runtime will run in a separate thread, but it should be
+//! noted that macOS does not support this type of runtime.
+//!
+//!
+//! #### MessagePumpLoop
+//!
+//! Message pump mechanism provides a way to manually drive the runtime message
+//! loop, which is convenient for integrating with existing message loop
+//! mechanisms.
+//!
+//! For example, if you already have a message loop, such as the event loop
+//! created by winit, you can use this mechanism to drive the wew runtime
+//! message loop.
+//!
+//! ```no_run
+//! MessagePumpLoop::default().poll();
+//! ```
+//!
+//! However, it should be noted that the timing of manually driving the message
+//! loop is recommended to be based on the callback time of
+//! **`MessagePumpRuntimeHandler::on_schedule_message_pump_work`**. This is not
+//! a mandatory requirement, it is just a suggestion, unless you are very clear
+//! about when to drive.
+//!
+//! Driving too early will increase CPU load, and driving too late will cause
+//! the UI to render abnormally or be delayed because of message loop
+//! starvation.
+
 use std::{
     ffi::{CString, c_void},
     marker::PhantomData,
@@ -24,6 +93,7 @@ use crate::{
     },
 };
 
+/// Log level, used to filter CEF logs
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LogLevel {
     Off,

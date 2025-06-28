@@ -1,3 +1,41 @@
+//! Network request related, including implementing custom request interception.
+//!
+//! ## Register global custom URL Scheme protocol
+//!
+//! ```no_run
+//! use wew::{
+//!     MainThreadMessageLoop, NativeWindowWebView,
+//!     request::{
+//!         CustomRequestHandlerFactory, CustomSchemeAttributes, RequestHandlerWithLocalDisk,
+//!     },
+//!     runtime::RuntimeAttributesBuilder,
+//! };
+//!
+//! fn main() {
+//!     let runtime_attributes =
+//!         RuntimeAttributesBuilder::<MainThreadMessageLoop, NativeWindowWebView>::default()
+//!             .register_scheme_handler(CustomSchemeAttributes::new(
+//!                 "webview",
+//!                 "localhost",
+//!                 CustomRequestHandlerFactory::new(RequestHandlerWithLocalDisk::new("/assets")),
+//!             ))
+//!             .build();
+//! }
+//! ```
+//!
+//! This example uses the disk mapping implementation provided by the module to
+//! provide the runtime configuration, and registers `webview://localhost` as a
+//! custom scheme. When requesting the `webview://localhost/xxx` URL, it will
+//! automatically map to the local disk.
+//!
+//! Of course, you can also implement your own request handler.
+//!
+//! ---
+//!
+//! In addition to registering custom scheme protocols globally, you can also
+//! use **`request_handler_factory`** in `WebView` to implement custom request
+//! handling.
+
 use std::{
     ffi::{CStr, CString, c_void},
     fs::File,
@@ -80,7 +118,7 @@ impl RequestHandler for LocalDiskRequestHandler {
 /// ```
 ///
 /// Besides using it for custom schemes, you can also use it for `WebView`
-/// request interception in the `request_handler_factory` of `WebView`.
+/// request interception in the **`request_handler_factory`** of `WebView`.
 ///
 /// Because this request handler will always remove the request protocol header
 /// and host, it can be used in different scenarios. For example,

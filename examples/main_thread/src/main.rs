@@ -30,8 +30,14 @@ impl WebViewHandler for WebViewObserver {
 }
 
 fn main() {
+    if wew::is_subprocess() {
+        wew::execute_subprocess();
+
+        return;
+    }
+
     #[cfg(target_os = "macos")]
-    wew::utils::startup_nsapplication();
+    wew::utils::inject_nsapplication();
 
     let message_loop = MainThreadMessageLoop::default();
 

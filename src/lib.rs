@@ -1,21 +1,117 @@
+//! Wew is a cross-platform WebView rendering library based on Chromium Embedded
+//! Framework (CEF). It supports mouse, keyboard, touch, input methods,
+//! off-screen rendering, and communication with web pages.
+//!
+//! ## Thread Considerations
+//!
+//! In the current project, WebView and Runtime calls are best executed on the
+//! UI thread, which is the main thread of the application process.
+//!
+//! Creating a Runtime must be completed on the UI thread, and all message loop
+//! calls must also be operated on the UI thread.
+//!
+//! Other calls should be executed on the UI thread whenever possible, unless it
+//! is truly unavoidable. Although these calls can run on any thread, there is
+//! currently no guarantee that they will not cause other side effects.
+//!
+//! However, it is important to note that if the WebView manages window events
+//! on its own, such as not using off-screen rendering, then the WebView can be
+//! created on any thread.
+//!
+//!
+//! ## Examples
+//!
+//! ```no_run
+//! use std::{
+//!     sync::mpsc::{Sender, channel},
+//!     thread,
+//! };
+//!
+//! use wew::{
+//!     MainThreadMessageLoop, MessageLoopAbstract, NativeWindowWebView,
+//!     runtime::{LogLevel, RuntimeHandler},
+//!     webview::{WebViewAttributes, WebViewHandler, WebViewState},
+//! };
+//!
+//! struct RuntimeObserver {
+//!     tx: Sender<()>,
+//! }
+//!
+//! impl RuntimeHandler for RuntimeObserver {
+//!     fn on_context_initialized(&self) {
+//!         self.tx.send(()).unwrap();
+//!     }
+//! }
+//!
+//! struct WebViewObserver;
+//!
+//! impl WebViewHandler for WebViewObserver {
+//!     fn on_state_change(&self, state: WebViewState) {
+//!         if state == WebViewState::Close {
+//!             std::process::exit(0);
+//!         }
+//!     }
+//! }
+//!
+//! fn main() {
+//!     if wew::is_subprocess() {
+//!         wew::execute_subprocess();
+//!
+//!         return;
+//!     }
+//!
+//!     #[cfg(target_os = "macos")]
+//!     wew::utils::startup_nsapplication();
+//!
+//!     let message_loop = MainThreadMessageLoop::default();
+//!
+//!     let mut runtime_attributes_builder =
+//!         message_loop.create_runtime_attributes_builder::<NativeWindowWebView>();
+//!
+//!     runtime_attributes_builder = runtime_attributes_builder
+//!         // Set cache path, here we use environment variables passed by the build script.
+//!         .with_root_cache_path(option_env!("CACHE_PATH").unwrap())
+//!         .with_cache_path(option_env!("CACHE_PATH").unwrap())
+//!         .with_log_severity(LogLevel::Info);
+//!
+//!     let (tx, rx) = channel();
+//!
+//!     // Create runtime, wait for the `on_context_initialized` event to be triggered
+//!     // before considering the creation successful.
+//!     let runtime = runtime_attributes_builder
+//!         .build()
+//!         .create_runtime(RuntimeObserver { tx })
+//!         .unwrap();
+//!
+//!     thread::spawn(move || {
+//!         rx.recv().unwrap();
+//!
+//!         let webview = runtime
+//!             .create_webview(
+//!                 "https://www.google.com",
+//!                 WebViewAttributes::default(),
+//!                 WebViewObserver,
+//!             )
+//!             .unwrap();
+//!
+//!         std::mem::forget(webview);
+//!         std::mem::forget(runtime);
+//!     });
+//!
+//!     message_loop.block_run();
+//! }
+//! ```
+
 #![cfg_attr(
     docsrs,
     feature(doc_auto_cfg, doc_cfg_hide),
     doc(cfg_hide(doc, docsrs))
 )]
 
-pub mod utils;
-
-/// Used to handle window events.
 pub mod events;
-
-/// Network request related, including implementing custom request interception.
 pub mod request;
-
-/// This module is used to manage the runtime.
 pub mod runtime;
-
-/// `WebView` module and related types.
+pub mod utils;
 pub mod webview;
 
 use std::sync::atomic::Ordering;
@@ -85,10 +181,20 @@ pub trait MessageLoopAbstract: Default + Clone + Copy {
 /// the runtime to run the message loop.
 ///
 /// Note that macOS does not support this type of message loop.
-#[derive(Default, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct MultiThreadMessageLoop;
 
 impl MessageLoopAbstract for MultiThreadMessageLoop {}
+
+impl Default for MultiThreadMessageLoop {
+    fn default() -> Self {
+        if cfg!(target_os = "macos") {
+            panic!("macOS does not support this type of message loop!");
+        }
+
+        Self
+    }
+}
 
 /// Main thread message loop
 ///
@@ -117,12 +223,8 @@ impl MainThreadMessageLoop {
     ///
     /// This function is used to quit the message loop on main thread.
     ///
-    /// Calling this function will cause `block_run` to exit and return.
+    /// Calling this function will cause **`block_run`** to exit and return.
     pub fn quit(&self) {
-        if !utils::is_main_thread() {
-            panic!("this operation is not allowed in non-main threads!");
-        }
-
         unsafe {
             sys::quit_message_loop();
         }
@@ -165,7 +267,7 @@ pub trait WebViewAbstract: Default {}
 ///
 /// When using off-screen rendering mode, the WebView will not be displayed on
 /// screen, but the rendering results will be pushed through
-/// `WindowlessRenderWebViewHandler::on_frame`, and you can handle the video
+/// **`WindowlessRenderWebViewHandler::on_frame`**, and you can handle the video
 /// frames yourself. Also, in this mode, mouse and keyboard events need to be
 /// passed to the WebView by yourself.
 #[derive(Default, Clone, Copy)]
@@ -184,9 +286,21 @@ impl WebViewAbstract for NativeWindowWebView {}
 
 /// Execute subprocess
 ///
-/// This function is used to execute subprocesses.
+/// This method is used to start a subprocess in a separate process.
 ///
-/// ### Please be careful!
+/// ## Examples
+///
+/// ```no_run
+/// fn main() {
+///     if wew::is_subprocess() {
+///         wew::execute_subprocess();
+///
+///         return;
+///     }
+/// }
+/// ```
+///
+/// #### Please be careful!
 ///
 /// Do not call this function in an asynchronous runtime, such as tokio,
 /// which can lead to unexpected crashes!
@@ -206,10 +320,5 @@ pub fn execute_subprocess() -> bool {
 /// Note that if the current process is a subprocess, it will block until the
 /// subprocess exits.
 pub fn is_subprocess() -> bool {
-    // TODO:
-    //
-    // This check is not very strict, but processes with a "type" parameter can
-    // generally be considered subprocesses, unless the main process also uses
-    // this parameter.
-    std::env::args().any(|it| it.contains("--type"))
+    std::env::args().any(|it| it.contains("--type="))
 }
