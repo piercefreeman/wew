@@ -5,10 +5,7 @@ use std::{
 };
 
 #[cfg(target_os = "macos")]
-use std::{
-    ffi::CStr,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::GetCurrentThreadId;
@@ -105,7 +102,7 @@ impl Args {
 /// `true` if the current thread is the main thread, `false` otherwise.
 pub fn is_main_thread() -> bool {
     thread_local! {
-        static IS_MAIN_THREAD: Cell<Option<bool>> = Cell::new(None);
+        static IS_MAIN_THREAD: Cell<Option<bool>> = const { Cell::new(None) };
     }
 
     if let Some(is_main_thread) = IS_MAIN_THREAD.get() {
@@ -173,21 +170,16 @@ pub fn startup_nsapplication() -> bool {
             HANDLING_SEND_EVENT.store(value.as_bool(), Ordering::Relaxed);
         }
 
-        let app = if let Some(app) =
-            AnyClass::get(unsafe { &CStr::from_bytes_with_nul_unchecked(b"NSApplication\0") })
-        {
+        let app = if let Some(app) = AnyClass::get(c"NSApplication") {
             app
         } else {
             return false;
         };
 
         {
-            let sel = Sel::register(unsafe {
-                &CStr::from_bytes_with_nul_unchecked(b"isHandlingSendEvent\0")
-            });
-
-            if !app.responds_to(sel.clone()) {
-                if !unsafe {
+            let sel = Sel::register(c"isHandlingSendEvent");
+            if !app.responds_to(sel)
+                && !unsafe {
                     class_addMethod(
                         app as *const _ as *mut _,
                         sel,
@@ -197,19 +189,16 @@ pub fn startup_nsapplication() -> bool {
                         "c@:\0".as_ptr() as _,
                     )
                     .as_bool()
-                } {
-                    return false;
                 }
+            {
+                return false;
             }
         }
 
         {
-            let sel = Sel::register(unsafe {
-                &CStr::from_bytes_with_nul_unchecked(b"setHandlingSendEvent:\0")
-            });
-
-            if !app.responds_to(sel.clone()) {
-                if !unsafe {
+            let sel = Sel::register(c"setHandlingSendEvent:");
+            if !app.responds_to(sel)
+                && !unsafe {
                     class_addMethod(
                         app as *const _ as *mut _,
                         sel,
@@ -219,9 +208,9 @@ pub fn startup_nsapplication() -> bool {
                         "v@:c\0".as_ptr() as _,
                     )
                     .as_bool()
-                } {
-                    return false;
                 }
+            {
+                return false;
             }
         }
     }

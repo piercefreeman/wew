@@ -4,8 +4,6 @@
     doc(cfg_hide(doc, docsrs))
 )]
 
-pub mod bridge;
-
 pub mod utils;
 
 /// Used to handle window events.

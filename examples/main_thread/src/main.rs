@@ -5,7 +5,7 @@ use std::{
 
 use wew::{
     MainThreadMessageLoop, MessageLoopAbstract, NativeWindowWebView,
-    runtime::{RuntimeHandler, LogLevel},
+    runtime::{LogLevel, RuntimeHandler},
     webview::{WebViewAttributes, WebViewHandler, WebViewState},
 };
 

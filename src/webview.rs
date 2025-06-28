@@ -531,11 +531,10 @@ impl IWebView {
             raw: Mutex::new(raw),
             context: ThreadSafePointer::new(context),
             mouse_event: Mutex::new(unsafe { std::mem::zeroed() }),
-            request_handler_factory: if let Some(it) = &attr.request_handler_factory {
-                Some(it.get_shared_ref())
-            } else {
-                None
-            },
+            request_handler_factory: attr
+                .request_handler_factory
+                .as_ref()
+                .map(|it| it.get_shared_ref()),
         })
     }
 }
@@ -651,7 +650,7 @@ impl WebView<WindowlessRenderWebView> {
                     sys::webview_mouse_click(
                         self.inner.raw.lock().as_ptr(),
                         *event,
-                        button.clone().into(),
+                        (*button).into(),
                         *is_pressed,
                     )
                 }
@@ -752,37 +751,37 @@ impl From<sys::WebViewState> for WebViewState {
     }
 }
 
-impl Into<sys::KeyEventType> for KeyboardEventType {
-    fn into(self) -> sys::KeyEventType {
-        match self {
-            Self::KeyDown => sys::KeyEventType::WEW_KEYEVENT_KEYDOWN,
-            Self::KeyUp => sys::KeyEventType::WEW_KEYEVENT_KEYUP,
-            Self::Char => sys::KeyEventType::WEW_KEYEVENT_CHAR,
+impl From<KeyboardEventType> for sys::KeyEventType {
+    fn from(val: KeyboardEventType) -> Self {
+        match val {
+            KeyboardEventType::KeyDown => sys::KeyEventType::WEW_KEYEVENT_KEYDOWN,
+            KeyboardEventType::KeyUp => sys::KeyEventType::WEW_KEYEVENT_KEYUP,
+            KeyboardEventType::Char => sys::KeyEventType::WEW_KEYEVENT_CHAR,
         }
     }
 }
 
-impl Into<sys::EventFlags> for KeyboardModifiers {
-    fn into(self) -> sys::EventFlags {
-        match self {
-            Self::None => sys::EventFlags::WEW_EVENTFLAG_NONE,
-            Self::Win => sys::EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
-            Self::Shift => sys::EventFlags::WEW_EVENTFLAG_SHIFT_DOWN,
-            Self::Ctrl => sys::EventFlags::WEW_EVENTFLAG_CONTROL_DOWN,
-            Self::Alt => sys::EventFlags::WEW_EVENTFLAG_ALT_DOWN,
-            Self::Command => sys::EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
-            Self::CapsLock => sys::EventFlags::WEW_EVENTFLAG_CAPS_LOCK_ON,
+impl From<KeyboardModifiers> for sys::EventFlags {
+    fn from(val: KeyboardModifiers) -> Self {
+        match val {
+            KeyboardModifiers::None => sys::EventFlags::WEW_EVENTFLAG_NONE,
+            KeyboardModifiers::Win => sys::EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
+            KeyboardModifiers::Shift => sys::EventFlags::WEW_EVENTFLAG_SHIFT_DOWN,
+            KeyboardModifiers::Ctrl => sys::EventFlags::WEW_EVENTFLAG_CONTROL_DOWN,
+            KeyboardModifiers::Alt => sys::EventFlags::WEW_EVENTFLAG_ALT_DOWN,
+            KeyboardModifiers::Command => sys::EventFlags::WEW_EVENTFLAG_COMMAND_DOWN,
+            KeyboardModifiers::CapsLock => sys::EventFlags::WEW_EVENTFLAG_CAPS_LOCK_ON,
             _ => sys::EventFlags::WEW_EVENTFLAG_NONE,
         }
     }
 }
 
-impl Into<sys::MouseButton> for MouseButton {
-    fn into(self) -> sys::MouseButton {
-        match self {
-            Self::Left => sys::MouseButton::WEW_MBT_LEFT,
-            Self::Middle => sys::MouseButton::WEW_MBT_MIDDLE,
-            Self::Right => sys::MouseButton::WEW_MBT_RIGHT,
+impl From<MouseButton> for sys::MouseButton {
+    fn from(val: MouseButton) -> Self {
+        match val {
+            MouseButton::Left => sys::MouseButton::WEW_MBT_LEFT,
+            MouseButton::Middle => sys::MouseButton::WEW_MBT_MIDDLE,
+            MouseButton::Right => sys::MouseButton::WEW_MBT_RIGHT,
         }
     }
 }

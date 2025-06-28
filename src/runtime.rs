@@ -494,11 +494,10 @@ impl IRuntime {
             raw: Mutex::new(raw),
             context: ThreadSafePointer::new(context),
             multi_threaded_message_loop: attr.multi_threaded_message_loop,
-            request_handler_factory: if let Some(it) = &attr.custom_scheme {
-                Some(it.handler.get_shared_ref())
-            } else {
-                None
-            },
+            request_handler_factory: attr
+                .custom_scheme
+                .as_ref()
+                .map(|it| it.handler.get_shared_ref()),
         })
     }
 
@@ -607,15 +606,15 @@ impl<R> Runtime<R, NativeWindowWebView> {
     }
 }
 
-impl Into<sys::LogLevel> for LogLevel {
-    fn into(self) -> sys::LogLevel {
-        match self {
-            Self::Off => sys::LogLevel::WEW_LOG_DISABLE,
-            Self::Info => sys::LogLevel::WEW_LOG_INFO,
-            Self::Error => sys::LogLevel::WEW_LOG_ERROR,
-            Self::Warn => sys::LogLevel::WEW_LOG_WARNING,
-            Self::Debug => sys::LogLevel::WEW_LOG_DEBUG,
-            Self::Trace => sys::LogLevel::WEW_LOG_VERBOSE,
+impl From<LogLevel> for sys::LogLevel {
+    fn from(val: LogLevel) -> Self {
+        match val {
+            LogLevel::Off => sys::LogLevel::WEW_LOG_DISABLE,
+            LogLevel::Info => sys::LogLevel::WEW_LOG_INFO,
+            LogLevel::Error => sys::LogLevel::WEW_LOG_ERROR,
+            LogLevel::Warn => sys::LogLevel::WEW_LOG_WARNING,
+            LogLevel::Debug => sys::LogLevel::WEW_LOG_DEBUG,
+            LogLevel::Trace => sys::LogLevel::WEW_LOG_VERBOSE,
         }
     }
 }
