@@ -336,7 +336,12 @@ mod winit_impl {
                             } else {
                                 // By default it is uppercase, needs to be shifted by 32 bits to
                                 // change to lowercase.
-                                event.windows_key_code += 32;
+                                if key_code != KeyCode::Space
+                                    && !self.modifiers.contains(KeyboardModifiers::CapsLock)
+                                    && !self.modifiers.contains(KeyboardModifiers::Shift)
+                                {
+                                    event.windows_key_code += 32;
+                                }
                             }
 
                             event.ty = KeyboardEventType::Char;
