@@ -107,6 +107,7 @@
     feature(doc_auto_cfg, doc_cfg_hide),
     doc(cfg_hide(doc, docsrs))
 )]
+#![allow(clippy::needless_doctest_main)]
 
 pub mod events;
 pub mod request;

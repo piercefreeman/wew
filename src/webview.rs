@@ -951,10 +951,10 @@ extern "C" fn on_frame_callback(frame: *const sys::Frame, context: *mut c_void) 
     let context = unsafe { &*(context as *mut WebViewContext) };
 
     let frame = Frame {
-        x: raw_frame.x as u32,
-        y: raw_frame.y as u32,
-        width: raw_frame.width as u32,
-        height: raw_frame.height as u32,
+        x: raw_frame.x,
+        y: raw_frame.y,
+        width: raw_frame.width,
+        height: raw_frame.height,
         buffer: unsafe {
             std::slice::from_raw_parts(
                 raw_frame.buffer as *const u8,

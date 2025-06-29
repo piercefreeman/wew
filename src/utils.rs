@@ -209,6 +209,7 @@ pub fn inject_nsapplication() -> bool {
             return false;
         };
 
+        #[allow(clippy::missing_transmute_annotations)]
         {
             let sel = Sel::register(c"isHandlingSendEvent");
             if !app.responds_to(sel)
@@ -219,7 +220,7 @@ pub fn inject_nsapplication() -> bool {
                         std::mem::transmute(
                             is_handling_send_event as extern "C" fn(&AnyObject, Sel) -> Bool,
                         ),
-                        "c@:\0".as_ptr() as _,
+                        c"c@:".as_ptr() as _,
                     )
                     .as_bool()
                 }
@@ -228,6 +229,7 @@ pub fn inject_nsapplication() -> bool {
             }
         }
 
+        #[allow(clippy::missing_transmute_annotations)]
         {
             let sel = Sel::register(c"setHandlingSendEvent:");
             if !app.responds_to(sel)
@@ -238,7 +240,7 @@ pub fn inject_nsapplication() -> bool {
                         std::mem::transmute(
                             set_handling_send_event as extern "C" fn(&AnyObject, Sel, Bool),
                         ),
-                        "v@:c\0".as_ptr() as _,
+                        c"v@:c".as_ptr() as _,
                     )
                     .as_bool()
                 }
