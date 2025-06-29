@@ -254,7 +254,7 @@ typedef struct
 #ifdef LINUX
 typedef unsigned long RawWindowHandle;
 #else
-typedef const void* RawWindowHandle;
+typedef const void *RawWindowHandle;
 #endif
 
 typedef struct
