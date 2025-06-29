@@ -300,7 +300,6 @@ class IWebView : public CefClient
     void SetFocus(bool enable);
     void Resize(int width, int height);
     void SetDevToolsOpenState(bool is_open);
-    const void *GetWindowHandle();
     void SendMessage(std::string message);
     void OnKeyboard(cef_key_event_t event);
     void OnMouseClick(cef_mouse_event_t event, cef_mouse_button_type_t button, bool pressed);
@@ -309,6 +308,7 @@ class IWebView : public CefClient
     void OnTouch(cef_touch_event_t event);
     void OnIMEComposition(std::string input);
     void OnIMESetComposition(std::string input, int x, int y);
+    RawWindowHandle GetWindowHandle();
 
   private:
     CefRefPtr<IWebViewDrag> _drag_handler = nullptr;

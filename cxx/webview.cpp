@@ -364,11 +364,17 @@ void IWebView::SetDevToolsOpenState(bool is_open)
     }
 }
 
-const void *IWebView::GetWindowHandle()
+RawWindowHandle IWebView::GetWindowHandle()
 {
+#ifdef LINUX
+    CHECK_REFCOUNTING(0);
+
+    return _browser.has_value() ? _browser.value()->GetHost()->GetWindowHandle() : 0;
+#else
     CHECK_REFCOUNTING(nullptr);
 
     return _browser.has_value() ? _browser.value()->GetHost()->GetWindowHandle() : nullptr;
+#endif
 }
 
 void IWebView::SendMessage(std::string message)

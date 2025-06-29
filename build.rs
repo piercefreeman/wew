@@ -4,7 +4,17 @@ use anyhow::{Result, anyhow};
 use which::which;
 
 fn join(root: &str, next: &str) -> String {
-    Path::new(root).join(next).to_str().unwrap().to_string()
+    Path::new(root)
+        .join(next)
+        .to_str()
+        .unwrap()
+        .replace("\\\\?\\", "")
+        .replace("\\", "/")
+        .to_string()
+}
+
+fn is_exsit(dir: &str) -> bool {
+    fs::metadata(dir).is_ok()
 }
 
 fn exec(command: &str, work_dir: &str) -> Result<String> {
@@ -77,17 +87,20 @@ fn download_cef(outdir: &str) -> Result<()> {
     exec("tar -xjf ./cef.tar.bz2 -C ./", outdir)?;
     exec("rm -f ./cef.tar.bz2", outdir)?;
     exec(&format!("mv ./{} ./cef", get_binary_name()), outdir)?;
-    exec(
-        "mv ./cef/Release/cef_sandbox.a ./cef/Release/libcef_sandbox.a",
-        outdir,
-    )?;
+
+    if is_exsit(&join(outdir, "./cef/Release/cef_sandbox.a")) {
+        exec(
+            "mv ./cef/Release/cef_sandbox.a ./cef/Release/libcef_sandbox.a",
+            outdir,
+        )?;
+    }
 
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
 fn download_cef(outdir: &str) -> Result<()> {
-    if !fs::exists(&join(outdir, "./7za.exe")).unwrap_or(false) {
+    if !is_exsit(&join(outdir, "./7za.exe")) {
         exec(
             "Invoke-WebRequest -Uri 'https://7-zip.org/a/7za920.zip' -OutFile ./7za.zip",
             outdir,
@@ -133,14 +146,7 @@ fn make_cef(cef_dir: &str) -> Result<()> {
     }
 
     exec(
-        &format!(
-            "cmake {} -DCMAKE_BUILD_TYPE=Release .",
-            if cfg!(not(target_os = "windows")) {
-                "-DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\""
-            } else {
-                ""
-            }
-        ),
+        "cmake -DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\" -DCMAKE_BUILD_TYPE=Release .",
         cef_dir,
     )?;
 
@@ -160,6 +166,13 @@ fn make_bindgen(outdir: &str, cef_dir: &str) -> Result<()> {
         .prepend_enum_name(false)
         .size_t_is_usize(true)
         .clang_arg(format!("-I{}", cef_dir))
+        .clang_arg(if cfg!(target_os = "windows") {
+            "-DWIN32"
+        } else if cfg!(target_os = "macos") {
+            "-DMACOS"
+        } else {
+            "-DLINUX"
+        })
         .header("./cxx/wew.h")
         .generate()?
         .write_to_file(join(outdir, "bindings.rs"))?;
@@ -240,11 +253,11 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    if !fs::exists(cef_dir).unwrap_or(false) {
+    if !is_exsit(cef_dir) {
         download_cef(&outdir)?;
     }
 
-    if !fs::exists(join(cef_dir, "./libcef_dll_wrapper")).unwrap_or(false) {
+    if !is_exsit(&join(cef_dir, "./libcef_dll_wrapper")) {
         make_cef(cef_dir)?;
     }
 
@@ -269,6 +282,12 @@ fn main() -> Result<()> {
     {
         println!("cargo:rustc-link-lib=cef");
         println!("cargo:rustc-link-lib=cef_dll_wrapper");
+        println!(
+            "cargo:rustc-link-search=all={}",
+            join(cef_dir, "./libcef_dll_wrapper")
+        );
+
+        println!("cargo:rustc-link-search=all={}", join(cef_dir, "./Release"));
     }
 
     #[cfg(target_os = "macos")]

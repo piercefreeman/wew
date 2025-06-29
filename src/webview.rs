@@ -62,12 +62,14 @@
 use std::{
     ffi::{CStr, CString, c_char, c_int, c_void},
     marker::PhantomData,
+    mem::MaybeUninit,
     ops::Deref,
     ptr::null,
     sync::Arc,
 };
 
 use parking_lot::Mutex;
+use raw_window_handle::RawWindowHandle;
 
 use crate::{
     Error, Rect, WindowlessRenderWebView,
@@ -164,21 +166,6 @@ pub enum WebViewState {
     Close = 5,
 }
 
-/// Represents a window handle
-pub struct WindowHandle(ThreadSafePointer<c_void>);
-
-impl WindowHandle {
-    /// Create a new window handle
-    pub fn new(value: *const c_void) -> Self {
-        WindowHandle(ThreadSafePointer::new(value as _))
-    }
-
-    /// Get the raw pointer of the window handle
-    pub fn as_ptr(&self) -> *const c_void {
-        self.0.as_ptr()
-    }
-}
-
 /// WebView handler
 ///
 /// This trait is used to handle web view events.
@@ -235,7 +222,7 @@ pub struct WebViewAttributes {
     /// Request handler factory.
     pub request_handler_factory: Option<CustomRequestHandlerFactory>,
     /// External native window handle.
-    pub window_handle: Option<WindowHandle>,
+    pub window_handle: Option<RawWindowHandle>,
     /// The maximum rate in frames per second (fps).
     pub windowless_frame_rate: u32,
     /// window size width.
@@ -323,7 +310,7 @@ impl WebViewAttributesBuilder {
     /// menus, and other elements. If not provided, the main screen monitor will
     /// be used, and some features that require a parent view may not work
     /// properly.
-    pub fn with_window_handle(mut self, value: WindowHandle) -> Self {
+    pub fn with_window_handle(mut self, value: RawWindowHandle) -> Self {
         self.0.window_handle = Some(value);
         self
     }
@@ -518,10 +505,26 @@ impl IWebView {
             windowless_frame_rate: attr.windowless_frame_rate,
             default_fixed_font_size: attr.default_fixed_font_size as _,
             default_font_size: attr.default_font_size as _,
-            window_handle: if let Some(it) = &attr.window_handle {
-                it.as_ptr()
-            } else {
-                null()
+            window_handle: {
+                #[cfg(not(target_os = "linux"))]
+                let mut value = null();
+
+                #[cfg(target_os = "linux")]
+                let mut value = 0;
+
+                if let Some(it) = &attr.window_handle {
+                    value = match it {
+                        #[cfg(target_os = "linux")]
+                        RawWindowHandle::Xlib(it) => it.window,
+                        #[cfg(target_os = "windows")]
+                        RawWindowHandle::Win32(it) => it.hwnd.get() as _,
+                        #[cfg(target_os = "macos")]
+                        RawWindowHandle::AppKit(it) => it.ns_view.as_ptr() as _,
+                        _ => unimplemented!("Unsupported window handle type: {:?}", it),
+                    };
+                }
+
+                value
             },
             request_handler_factory: if let Some(it) = &attr.request_handler_factory {
                 it.as_raw().as_ptr() as _
@@ -610,6 +613,51 @@ impl<W> WebView<W> {
         })
     }
 
+    /// Get the window handle
+    ///
+    /// This function is used to get the window handle.
+    pub fn window_handle(&self) -> Option<RawWindowHandle> {
+        let handle = unsafe { sys::webview_get_window_handle(self.inner.raw.lock().as_ptr()) };
+
+        let mut value = MaybeUninit::<RawWindowHandle>::uninit();
+
+        #[cfg(target_os = "linux")]
+        if handle == 0 {
+            return None;
+        } else {
+            unsafe {
+                value.as_mut_ptr().write(RawWindowHandle::Xlib(
+                    raw_window_handle::XlibWindowHandle::new(handle),
+                ));
+            }
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        if handle.is_null() {
+            return None;
+        } else {
+            #[cfg(target_os = "windows")]
+            unsafe {
+                value.as_mut_ptr().write(RawWindowHandle::Win32(
+                    raw_window_handle::Win32WindowHandle::new(
+                        std::num::NonZeroIsize::new(handle as _).unwrap(),
+                    ),
+                ));
+            }
+
+            #[cfg(target_os = "macos")]
+            unsafe {
+                value.as_mut_ptr().write(RawWindowHandle::AppKit(
+                    raw_window_handle::AppKitWindowHandle::new(std::ptr::NonNull::new_unchecked(
+                        handle as _,
+                    )),
+                ));
+            }
+        }
+
+        Some(unsafe { value.assume_init() })
+    }
+
     /// Send a message
     ///
     /// This function is used to send a message to the web page.
@@ -621,18 +669,6 @@ impl<W> WebView<W> {
 
         unsafe {
             sys::webview_send_message(self.inner.raw.lock().as_ptr(), message.as_raw());
-        }
-    }
-
-    /// Get the window handle
-    ///
-    /// This function is used to get the window handle.
-    pub fn window_handle(&self) -> Option<WindowHandle> {
-        let handle = unsafe { sys::webview_get_window_handle(self.inner.raw.lock().as_ptr()) };
-        if !handle.is_null() {
-            Some(WindowHandle::new(handle))
-        } else {
-            None
         }
     }
 

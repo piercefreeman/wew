@@ -35,5 +35,6 @@ if(MSVC)
 elseif(APPLE)
     add_compile_definitions(MACOS)
 elseif(UNIX AND NOT APPLE)
-    add_compile_definitions(LINUX)
+    add_compile_definitions(LINUX
+                            CEF_X11)
 endif()

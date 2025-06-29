@@ -116,12 +116,15 @@ CefRefPtr<IWebView> IRuntime::CreateWebView(std::string url, const WebViewSettin
     CefWindowInfo window_info;
     if (_cef_settings.windowless_rendering_enabled)
     {
-        window_info.SetAsWindowless(settings->window_handle != nullptr ? (CefWindowHandle)(settings->window_handle)
-                                                                       : nullptr);
+        window_info.SetAsWindowless((CefWindowHandle)settings->window_handle);
     }
     else
     {
+#ifdef LINUX
+        if (settings->window_handle != 0)
+#else
         if (settings->window_handle != nullptr)
+#endif
         {
             CefRect rect(0, 0, settings->width, settings->height);
             window_info.SetAsChild((CefWindowHandle)(settings->window_handle), rect);

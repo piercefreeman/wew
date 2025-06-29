@@ -219,7 +219,7 @@ mod winit_impl {
                         // Because key events are triggered before IME events, an extra character is
                         // output. If IME events are enabled, the previously entered character
                         // should be deleted.
-                        {
+                        if cfg!(target_os = "windows") {
                             let mut event = KeyboardEvent {
                                 ty: KeyboardEventType::KeyDown,
                                 modifiers: KeyboardModifiers::None,
@@ -374,6 +374,12 @@ mod winit_impl {
                                 event.modifiers |= modifiers;
                             } else {
                                 event.modifiers.remove(modifiers);
+                            }
+                        }
+
+                        if cfg!(target_os = "linux") {
+                            if key_code == KeyCode::Backspace || key_code == KeyCode::Enter {
+                                event.windows_key_code = event.character as u32;
                             }
                         }
 

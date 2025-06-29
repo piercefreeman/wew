@@ -171,7 +171,7 @@ pub fn is_main_thread() -> bool {
 
         #[cfg(target_os = "linux")]
         {
-            is_main_thread = { syscall(SYS_gettid) == getpid() as c_long };
+            is_main_thread = unsafe { syscall(SYS_gettid) == getpid() as c_long };
         }
 
         IS_MAIN_THREAD.set(Some(is_main_thread));

@@ -121,6 +121,8 @@ use self::runtime::{RUNTIME_RUNNING, RuntimeAttributesBuilder};
 #[cfg(feature = "winit")]
 pub use winit;
 
+pub use raw_window_handle;
+
 #[allow(
     dead_code,
     unused_imports,

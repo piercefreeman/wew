@@ -16,6 +16,7 @@ bitflags = "2.9.1"
 parking_lot = "0.12"
 url = "2.5.4"
 mime_guess = "2.0.5"
+raw-window-handle = "0.6.2"
 winit = { version = "0.30", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

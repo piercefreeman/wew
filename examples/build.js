@@ -216,5 +216,30 @@ void (async () => {
         }
 
         await command(`../target/examples/${Project}.app/Contents/MacOS/${Project}`);
+    } else {
+        const cefOutDir = join(
+            await getCrateOutdir(`../target/debug`, "wew", "./cef/Release"),
+            "../"
+        );
+
+        if (!existsSync(`../target/examples/${Project}`)) {
+            await mkdir(`../target/examples/${Project}`);
+        }
+
+        for (const item of [
+            [`../target/debug/${Project}`, `../target/examples/${Project}/${Project}`],
+            [
+                `../target/debug/${Project}-helper`,
+                `../target/examples/${Project}/${Project}-helper`,
+            ],
+            [`${cefOutDir}/Release`, `../target/examples/${Project}/`],
+            [`${cefOutDir}/Resources`, `../target/examples/${Project}/`],
+        ]) {
+            await cp(...item, { force: true, recursive: true });
+        }
+
+        console.log(`note: add ${resolve(`../target/examples/${Project} to LD_LIBRARY_PATH env`)}`);
+
+        await command(`../target/examples/${Project}/${Project}`);
     }
 })();

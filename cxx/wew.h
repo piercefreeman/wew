@@ -251,6 +251,12 @@ typedef struct
     void *context;
 } RuntimeHandler;
 
+#ifdef LINUX
+typedef unsigned long RawWindowHandle;
+#else
+typedef const void* RawWindowHandle;
+#endif
+
 typedef struct
 {
     /// window size width.
@@ -303,7 +309,7 @@ typedef struct
     uint32_t windowless_frame_rate;
 
     /// External native window handle.
-    const void *window_handle;
+    RawWindowHandle window_handle;
 
     /// The request handler factory.
     const RequestHandlerFactory *request_handler_factory;
@@ -625,7 +631,7 @@ extern "C"
 
     EXPORT void webview_resize(void *webview, int width, int height);
 
-    EXPORT const void *webview_get_window_handle(void *webview);
+    EXPORT RawWindowHandle webview_get_window_handle(void *webview);
 
     EXPORT void webview_set_focus(void *webview, bool enable);
 

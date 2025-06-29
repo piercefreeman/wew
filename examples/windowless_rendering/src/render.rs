@@ -122,7 +122,14 @@ impl Render {
 
         let mut surface_config = surface.get_default_config(&adapter, WIDTH, HEIGHT).unwrap();
         surface.configure(&device, {
-            surface_config.present_mode = PresentMode::Immediate;
+            surface_config.present_mode = if cfg!(target_os = "windows") {
+                PresentMode::Mailbox
+            } else if cfg!(target_os = "linux") {
+                PresentMode::Fifo
+            } else {
+                PresentMode::Immediate
+            };
+
             surface_config.format = TextureFormat::Bgra8Unorm;
             surface_config.alpha_mode = CompositeAlphaMode::Opaque;
             surface_config.usage = TextureUsages::RENDER_ATTACHMENT;

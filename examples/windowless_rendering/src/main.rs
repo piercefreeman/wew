@@ -7,13 +7,13 @@ mod webview;
 use std::sync::Arc;
 
 use anyhow::Result;
-use wew::{MessagePumpLoop, Rect, webview::WindowHandle};
+use wew::{MessagePumpLoop, Rect};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
-    raw_window_handle::{HasWindowHandle, RawWindowHandle},
+    raw_window_handle::HasWindowHandle,
     window::{Window, WindowAttributes, WindowId},
 };
 
@@ -89,18 +89,11 @@ impl ApplicationHandler<UserEvent> for App {
                     // Create renderer
                     let render = pollster::block_on(render::Render::new(window.clone())).unwrap();
 
-                    // Get the current winit window's native window handle to pass to the webview
-                    // for binding relationships with popup windows, etc.
-                    let window_handle =
-                        WindowHandle::new(match window.window_handle().unwrap().as_raw() {
-                            RawWindowHandle::Win32(it) => it.hwnd.get() as _,
-                            RawWindowHandle::AppKit(it) => it.ns_view.as_ptr() as _,
-                            _ => unimplemented!("Unsupported window handle type"),
-                        });
-
                     // Create webview instance
                     if let Some(webview) = self.webview.as_mut() {
-                        webview.create_webview(URL, window_handle, render).unwrap();
+                        webview
+                            .create_webview(URL, window.window_handle().unwrap().as_raw(), render)
+                            .unwrap();
                     }
                 }
             }

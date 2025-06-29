@@ -293,7 +293,7 @@ void webview_resize(void *webview, int width, int height)
     static_cast<WebView *>(webview)->ref->Resize(width, height);
 }
 
-const void *webview_get_window_handle(void *webview)
+RawWindowHandle webview_get_window_handle(void *webview)
 {
     assert(webview != nullptr);
 

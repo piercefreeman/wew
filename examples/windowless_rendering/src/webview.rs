@@ -13,11 +13,9 @@ use parking_lot::Mutex;
 use wew::{
     MessageLoopAbstract, MessagePumpLoop, Rect, WindowlessRenderWebView,
     events::EventAdapter,
+    raw_window_handle::RawWindowHandle,
     runtime::{LogLevel, MessagePumpRuntimeHandler, Runtime, RuntimeHandler},
-    webview::{
-        WebView, WebViewAttributesBuilder, WebViewHandler, WindowHandle,
-        WindowlessRenderWebViewHandler,
-    },
+    webview::{WebView, WebViewAttributesBuilder, WebViewHandler, WindowlessRenderWebViewHandler},
 };
 
 use winit::{event::WindowEvent, event_loop::EventLoopProxy};
@@ -139,7 +137,7 @@ impl Webview {
                     } else if cfg!(target_os = "macos") {
                         "../Frameworks/windowless-rendering Helper.app/Contents/MacOS/windowless-rendering Helper"
                     } else {
-                        unimplemented!()
+                        "./windowless-rendering-helper"
                     }
                 )
                 .unwrap(),
@@ -166,7 +164,7 @@ impl Webview {
     pub fn create_webview(
         &mut self,
         url: &str,
-        window_handle: WindowHandle,
+        window_handle: RawWindowHandle,
         render: Render,
     ) -> Result<()> {
         // Create webview instance
