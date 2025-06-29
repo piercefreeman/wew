@@ -3,7 +3,7 @@
   <h1>WEW</h1>
 </div>
 <div align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/wew/check.yml?branch=main?style=flat-square"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/wew/check.yml?branch=main&style=flat-square"/>
   <img src="https://img.shields.io/crates/v/wew?style=flat-square"/>
   <img src="https://img.shields.io/docsrs/wew?style=flat-square"/>
   <img src="https://img.shields.io/github/license/mycrl/wew?style=flat-square"/>
