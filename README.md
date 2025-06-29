@@ -16,7 +16,7 @@
     <a href="https://cef-builds.spotifycdn.com/index.html">137.0.17+gf354b0e+chromium-137.0.7151.104</a>
   </sup>
   </br>
-  <sup>platform supported: windows / macOS</sup>
+  <sup>platform supported: windows / macOS / linux (x11)</sup>
 </div>
 
 ---
