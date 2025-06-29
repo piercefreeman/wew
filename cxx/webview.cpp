@@ -204,15 +204,17 @@ void IWebViewRender::OnPaint(CefRefPtr<CefBrowser> browser,
         return;
     }
 
-    bool is_popup = type == PaintElementType::PET_POPUP;
+    Frame frame;
+    frame.width = width;
+    frame.height = height;
+    frame.buffer = buffer;
+    frame.is_popup = type == PaintElementType::PET_POPUP;
 
-    auto first_rect = dirtyRects[0];
-    _texture_rect.width = is_popup ? first_rect.width : width;
-    _texture_rect.height = is_popup ? first_rect.height : height;
-    _texture_rect.x = is_popup ? _popup_rect.x : 0;
-    _texture_rect.y = is_popup ? _popup_rect.y : 0;
+    auto rect = dirtyRects[0];
+    frame.x = frame.is_popup ? _popup_rect.x : rect.x;
+    frame.y = frame.is_popup ? _popup_rect.y : rect.y;
 
-    _handler.on_frame(buffer, &_texture_rect, _handler.context);
+    _handler.on_frame(&frame, _handler.context);
 }
 
 void IWebViewRender::OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect &rect)

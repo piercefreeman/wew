@@ -326,10 +326,20 @@ typedef enum
 
 typedef struct
 {
+    bool is_popup;
+    const void *buffer;
+    uint32_t width;
+    uint32_t height;
+    uint32_t x;
+    uint32_t y;
+} Frame;
+
+typedef struct
+{
     void (*on_cursor)(CursorType type, void *context);
     void (*on_state_change)(WebViewState state, void *context);
     void (*on_ime_rect)(Rect rect, void *context);
-    void (*on_frame)(const void *buf, Rect *rect, void *context);
+    void (*on_frame)(const Frame *frame, void *context);
     void (*on_title_change)(const char *title, void *context);
     void (*on_fullscreen_change)(bool fullscreen, void *context);
     void (*on_message)(const char *message, void *context);

@@ -15,7 +15,9 @@ use wew::{
     events::EventAdapter,
     raw_window_handle::RawWindowHandle,
     runtime::{LogLevel, MessagePumpRuntimeHandler, Runtime, RuntimeHandler},
-    webview::{WebView, WebViewAttributesBuilder, WebViewHandler, WindowlessRenderWebViewHandler},
+    webview::{
+        Frame, WebView, WebViewAttributesBuilder, WebViewHandler, WindowlessRenderWebViewHandler,
+    },
 };
 
 use winit::{event::WindowEvent, event_loop::EventLoopProxy};
@@ -50,8 +52,8 @@ impl WindowlessRenderWebViewHandler for WebViewObserver {
     // When the webview needs to render, this function will be called.
     //
     // Here we call the renderer to render the webview's output to the window.
-    fn on_frame(&self, texture: &[u8], rect: Rect) {
-        self.render.lock().render(texture, &rect);
+    fn on_frame(&self, frame: &Frame) {
+        self.render.lock().render(frame);
     }
 
     // Notify winit of the input cursor position.

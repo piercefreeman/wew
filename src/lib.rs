@@ -157,7 +157,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Represents a rectangular area
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Rect {
     pub x: u32,
     pub y: u32,

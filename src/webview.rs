@@ -139,6 +139,41 @@ pub enum CursorType {
     NumValues = 50,
 }
 
+/// Represents the type of a frame
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum FrameType {
+    View,
+    Popup,
+}
+
+/// Represents a rendered frame of a web page
+#[derive(Clone, Copy)]
+pub struct Frame<'a> {
+    pub ty: FrameType,
+    /// The buffer of the frame
+    pub buffer: &'a [u8],
+    /// The x coordinate of the frame
+    pub x: u32,
+    /// The y coordinate of the frame
+    pub y: u32,
+    /// The width of the frame
+    pub width: u32,
+    /// The height of the frame
+    pub height: u32,
+}
+
+impl std::fmt::Debug for Frame<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Frame")
+            .field("ty", &self.ty)
+            .field("x", &self.x)
+            .field("y", &self.y)
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .finish()
+    }
+}
+
 /// Represents the state of a web page
 ///
 /// The order of events is as follows:
@@ -214,7 +249,7 @@ pub trait WindowlessRenderWebViewHandler: WebViewHandler {
     ///
     /// It should be noted that if the webview is resized, the width and height
     /// of the texture will also change.
-    fn on_frame(&self, texture: &[u8], rect: Rect) {}
+    fn on_frame(&self, frame: &Frame) {}
 }
 
 /// WebView configuration attributes
@@ -907,39 +942,34 @@ extern "C" fn on_ime_rect_callback(rect: sys::Rect, context: *mut c_void) {
     }
 }
 
-extern "C" fn on_frame_callback(
-    texture: *const c_void,
-    rect: *mut sys::Rect,
-    context: *mut c_void,
-) {
-    if context.is_null() {
+extern "C" fn on_frame_callback(frame: *const sys::Frame, context: *mut c_void) {
+    if context.is_null() || frame.is_null() {
         return;
     }
 
-    let rect = {
-        let value = unsafe { &*rect };
-
-        Rect {
-            x: value.x as u32,
-            y: value.y as u32,
-            width: value.width as u32,
-            height: value.height as u32,
-        }
-    };
-
+    let raw_frame = unsafe { &*frame };
     let context = unsafe { &*(context as *mut WebViewContext) };
 
+    let frame = Frame {
+        x: raw_frame.x as u32,
+        y: raw_frame.y as u32,
+        width: raw_frame.width as u32,
+        height: raw_frame.height as u32,
+        buffer: unsafe {
+            std::slice::from_raw_parts(
+                raw_frame.buffer as *const u8,
+                raw_frame.width as usize * raw_frame.height as usize * 4,
+            )
+        },
+        ty: if raw_frame.is_popup {
+            FrameType::Popup
+        } else {
+            FrameType::View
+        },
+    };
+
     if let MixWebviewHnadler::WindowlessRenderWebViewHandler(handler) = &context.handler {
-        handler.on_frame(
-            // Fixed as BGRA texture buffer, not padded and not aligned.
-            unsafe {
-                std::slice::from_raw_parts(
-                    texture as _,
-                    rect.width as usize * rect.height as usize * 4,
-                )
-            },
-            rect,
-        )
+        handler.on_frame(&frame);
     }
 }
 

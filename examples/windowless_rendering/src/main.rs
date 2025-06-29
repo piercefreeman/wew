@@ -19,7 +19,7 @@ use winit::{
 
 static WIDTH: u32 = 1280;
 static HEIGHT: u32 = 720;
-static URL: &str = "https:/google.com";
+static URL: &str = "https://google.com";
 
 enum UserEvent {
     RuntimeContextInitialized,
