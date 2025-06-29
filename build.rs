@@ -146,7 +146,14 @@ fn make_cef(cef_dir: &str) -> Result<()> {
     }
 
     exec(
-        "cmake -DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\" -DCMAKE_BUILD_TYPE=Release .",
+        &format!(
+            "cmake {} -DCMAKE_BUILD_TYPE=Release .",
+            if cfg!(not(target_os = "windows")) {
+                "-DCMAKE_CXX_FLAGS=\"-Wno-deprecated-builtins\""
+            } else {
+                ""
+            }
+        ),
         cef_dir,
     )?;
 
