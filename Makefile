@@ -23,6 +23,8 @@ run-tests: package-tests
 		echo "Running executable..."; \
 		./wew-tests/wew-tests; \
 	fi
+	@echo "Cleaning up extracted files..."
+	rm -rf wew-tests/
 
 # Full test pipeline
 test-full: run-tests
