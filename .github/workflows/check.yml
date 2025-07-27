@@ -28,6 +28,48 @@ jobs:
               run: |
                   cargo check
 
-            - name: Test
+            - name: Build project and wrap_wew
               run: |
-                  cargo test
+                  cargo build --release
+
+            - name: Build test executable
+              run: |
+                  cargo test --no-run --release
+
+            - name: Package tests with wrap_wew
+              run: |
+                  # Find the test executable
+                  TEST_EXECUTABLE=$(find target/release/deps -name "*-*" -type f -executable | grep -v "\.d$" | head -1)
+                  echo "Found test executable: $TEST_EXECUTABLE"
+                  
+                  # Create a temporary directory structure for wrap_wew
+                  mkdir -p temp_test_project/src
+                  echo 'fn main() {}' > temp_test_project/src/main.rs
+                  echo '[package]
+name = "wew-tests"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wew-tests"
+path = "src/main.rs"' > temp_test_project/Cargo.toml
+                  
+                  # Copy the actual test executable to replace the dummy one
+                  cp "$TEST_EXECUTABLE" temp_test_project/target/release/wew-tests 2>/dev/null || mkdir -p temp_test_project/target/release && cp "$TEST_EXECUTABLE" temp_test_project/target/release/wew-tests
+                  
+                  # Package with wrap_wew
+                  ./target/release/wrap_wew --entrypoint ./temp_test_project --release
+
+            - name: Run packaged tests
+              run: |
+                  # Extract and run the packaged tests
+                  tar -xf wew-tests.tar
+                  if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+                    ./wew-tests/wew-tests.app/Contents/MacOS/wew-tests
+                  else
+                    ./wew-tests/wew-tests
+                  fi
+
+            - name: Cleanup
+              run: |
+                  rm -rf temp_test_project wew-tests.tar wew-tests/

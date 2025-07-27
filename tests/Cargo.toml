@@ -1,0 +1,17 @@
+[workspace]
+
+[package]
+name = "wew-tests"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wew-tests"
+path = "main.rs"
+
+[[bin]]
+name = "wew-tests-helper"
+path = "helper.rs"
+
+[dependencies]
+wew = { path = "../", features = ["winit"] } 
