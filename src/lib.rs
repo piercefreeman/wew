@@ -109,6 +109,7 @@
 )]
 #![allow(clippy::needless_doctest_main)]
 
+pub mod cookie;
 pub mod events;
 pub mod request;
 pub mod runtime;
