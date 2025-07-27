@@ -1,0 +1,86 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          #- os: windows-latest
+          #  target: x86_64-pc-windows-msvc
+          #  artifact_name: wrap_wew.exe
+          #  asset_name: wrap_wew-windows-x86_64.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: wrap_wew
+            asset_name: wrap_wew-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: wrap_wew
+            asset_name: wrap_wew-macos-aarch64
+          #- os: ubuntu-latest
+          #  target: x86_64-unknown-linux-gnu
+          #  artifact_name: wrap_wew
+          #  asset_name: wrap_wew-linux-x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ matrix.os }}-${{ matrix.target }}-cargo
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build wrap_wew
+        run: cargo build --release --bin wrap_wew --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+  create_release:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release_assets
+          for artifact_dir in artifacts/*/; do
+            artifact_name=$(basename "$artifact_dir")
+            artifact_file=$(find "$artifact_dir" -type f | head -1)
+            if [ -f "$artifact_file" ]; then
+              cp "$artifact_file" "release_assets/$artifact_name"
+              chmod +x "release_assets/$artifact_name" 2>/dev/null || true
+            fi
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          files: release_assets/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

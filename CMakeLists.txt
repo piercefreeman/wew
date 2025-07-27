@@ -18,7 +18,9 @@ add_library(webview SHARED
             ./cxx/util.cpp
             ./cxx/util.h
             ./cxx/request.h
-            ./cxx/request.cpp)
+            ./cxx/request.cpp
+            ./cxx/cookie.h
+            ./cxx/cookie.cpp)
 
 # You need to manually create the directory and copy the CEF source code to this directory.
 set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")

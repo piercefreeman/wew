@@ -66,6 +66,29 @@ typedef struct
     const RequestHandlerFactory *factory;
 } CustomSchemeAttributes;
 
+typedef struct
+{
+    const char *name;
+    const char *value;
+    const char *domain;
+    const char *path;
+    bool secure;
+    bool httponly;
+    int64_t expires;
+    bool has_expires;
+    int64_t creation;
+    int64_t last_access;
+    int same_site;  // 0 = unspecified, 1 = no_restriction, 2 = lax_mode, 3 = strict_mode
+    int priority;   // 0 = low, 1 = medium, 2 = high
+} Cookie;
+
+typedef struct
+{
+    bool (*visit)(const Cookie *cookie, int count, int total, bool *delete_cookie, void *context);
+    void (*destroy)(void *context);
+    void *context;
+} CookieVisitor;
+
 ///
 /// Cursor type values.
 ///
@@ -644,6 +667,23 @@ extern "C"
     EXPORT RawWindowHandle webview_get_window_handle(void *webview);
 
     EXPORT void webview_set_focus(void *webview, bool enable);
+
+    ///
+    /// Cookie management functions
+    ///
+    EXPORT void *wew_get_global_cookie_manager();
+    
+    EXPORT void wew_destroy_cookie_manager(void *manager);
+    
+    EXPORT bool wew_set_cookie(void *manager, const char *url, const Cookie *cookie);
+    
+    EXPORT bool wew_delete_cookies(void *manager, const char *url, const char *name);
+    
+    EXPORT void wew_visit_all_cookies(void *manager, CookieVisitor *visitor);
+    
+    EXPORT void wew_visit_url_cookies(void *manager, const char *url, bool includeHttpOnly, CookieVisitor *visitor);
+    
+    EXPORT bool wew_flush_cookie_store(void *manager);
 
 #ifdef __cplusplus
 }

@@ -212,7 +212,8 @@ fn make_library(outdir: &str, cef_dir: &str) -> Result<()> {
         .file("./cxx/runtime.cpp")
         .file("./cxx/request.cpp")
         .file("./cxx/subprocess.cpp")
-        .file("./cxx/webview.cpp");
+        .file("./cxx/webview.cpp")
+        .file("./cxx/cookie.cpp");
 
     #[cfg(target_os = "windows")]
     compiler

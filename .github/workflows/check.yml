@@ -1,17 +1,15 @@
-name: publish release
+name: Run tests
 on:
-    push:
-        branches:
-            - "main"
+    push
 jobs:
     check:
         runs-on: "${{ matrix.os }}"
         strategy:
             matrix:
                 os:
-                    - windows-latest
+                    #- windows-latest
                     - macos-latest
-                    - ubuntu-latest
+                    #- ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - uses: actions/cache@v4
@@ -27,3 +25,7 @@ jobs:
             - name: Check
               run: |
                   cargo check
+
+            - name: Run tests
+              run: |
+                  make run-tests
